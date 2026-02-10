@@ -1,0 +1,3 @@
+[workspace]
+members = ["data-service", "scheduling-service", "shared"]
+resolver = "2"
