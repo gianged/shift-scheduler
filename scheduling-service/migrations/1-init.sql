@@ -6,8 +6,8 @@ CREATE TABLE schedule_jobs (
     group_id UUID NOT NULL,
     run_at DATE NOT NULL,
     status job_status NOT NULL DEFAULT 'PENDING',
-    create_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    update_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE shift_assignments (

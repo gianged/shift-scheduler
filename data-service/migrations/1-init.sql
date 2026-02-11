@@ -6,16 +6,16 @@ CREATE TABLE staff (
     email VARCHAR(255) CONSTRAINT uq_staff_email UNIQUE NOT NULL,
     position VARCHAR(255) NOT NULL,
     status staff_status NOT NULL DEFAULT 'ACTIVE',
-    create_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    update_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE staff_groups (
     id UUID CONSTRAINT pk_staff_groups PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
     parent_group_id UUID CONSTRAINT fk_staff_groups_parent REFERENCES staff_groups(id) ON DELETE SET NULL,
-    create_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    update_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE group_memberships (
