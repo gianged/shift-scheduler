@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use serde::Deserialize;
-use shared::types::StaffGroups;
+use shared::types::StaffGroup;
 use uuid::Uuid;
 
 use crate::error::DataServiceError;
@@ -19,13 +19,13 @@ pub struct UpdateGroup {
 
 #[async_trait]
 pub trait GroupRepository: Send + Sync {
-    async fn find_by_id(&self, id: Uuid) -> Result<Option<StaffGroups>, DataServiceError>;
-    async fn find_all(&self) -> Result<Vec<StaffGroups>, DataServiceError>;
-    async fn create(&self, group: CreateGroup) -> Result<StaffGroups, DataServiceError>;
+    async fn find_by_id(&self, id: Uuid) -> Result<Option<StaffGroup>, DataServiceError>;
+    async fn find_all(&self) -> Result<Vec<StaffGroup>, DataServiceError>;
+    async fn create(&self, group: CreateGroup) -> Result<StaffGroup, DataServiceError>;
     async fn batch_create(
         &self,
         groups: Vec<CreateGroup>,
-    ) -> Result<Vec<StaffGroups>, DataServiceError>;
-    async fn update(&self, id: Uuid, group: UpdateGroup) -> Result<StaffGroups, DataServiceError>;
+    ) -> Result<Vec<StaffGroup>, DataServiceError>;
+    async fn update(&self, id: Uuid, group: UpdateGroup) -> Result<StaffGroup, DataServiceError>;
     async fn delete(&self, id: Uuid) -> Result<(), DataServiceError>;
 }

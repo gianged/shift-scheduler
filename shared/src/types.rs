@@ -25,7 +25,7 @@ pub struct Staff {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct StaffGroups {
+pub struct StaffGroup {
     pub id: Uuid,
     pub name: String,
     pub parent_group_id: Option<Uuid>,
@@ -34,7 +34,7 @@ pub struct StaffGroups {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct GroupMemberships {
+pub struct GroupMembership {
     pub staff_id: Uuid,
     pub group_id: Uuid,
 }
@@ -63,7 +63,7 @@ pub enum ShiftType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct ScheduleJobs {
+pub struct ScheduleJob {
     pub id: Uuid,
     pub group_id: Uuid,
     pub run_at: NaiveDate,
@@ -73,7 +73,7 @@ pub struct ScheduleJobs {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct ShiftAssignments {
+pub struct ShiftAssignment {
     pub id: Uuid,
     pub job_id: Uuid,
     pub staff_id: Uuid,
