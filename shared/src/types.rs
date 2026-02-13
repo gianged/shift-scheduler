@@ -1,17 +1,19 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::prelude::{FromRow, Type};
 use uuid::Uuid;
 
 // region: Data Service Types
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[sqlx(type_name = "staff_status", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StaffStatus {
     Active,
     Inactive,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Staff {
     pub id: Uuid,
     pub name: String,
@@ -22,7 +24,7 @@ pub struct Staff {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct StaffGroups {
     pub id: Uuid,
     pub name: String,
@@ -31,7 +33,7 @@ pub struct StaffGroups {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct GroupMemberships {
     pub staff_id: Uuid,
     pub group_id: Uuid,
@@ -41,8 +43,9 @@ pub struct GroupMemberships {
 
 // region: Scheduling Service Types
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[sqlx(type_name = "job_status", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum JobStatus {
     Pending,
     Processing,
@@ -50,15 +53,16 @@ pub enum JobStatus {
     Failed,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[sqlx(type_name = "shift_type", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ShiftType {
     Morning,
     Evening,
     DayOff,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct ScheduleJobs {
     pub id: Uuid,
     pub group_id: Uuid,
@@ -68,7 +72,7 @@ pub struct ScheduleJobs {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct ShiftAssignments {
     pub id: Uuid,
     pub job_id: Uuid,
