@@ -32,3 +32,5 @@ CREATE INDEX idx_staff_status ON staff(status);
 CREATE INDEX idx_staff_groups_parent ON staff_groups(parent_group_id);
 
 CREATE INDEX idx_gm_group ON group_memberships(group_id);
+
+CREATE INDEX idx_gm_staff ON group_memberships(staff_id);

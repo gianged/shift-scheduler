@@ -24,7 +24,7 @@ impl StaffRepository for PgStaffRepository {
         let output = sqlx::query_as!(
             Staff,
             r#"
-            SELECT id, name, email, position, status as "status: _", created_at, updated_at
+            SELECT id, name, email, position, status AS "status: _", created_at, updated_at
             FROM staff
             WHERE id = $1
         "#,
@@ -40,7 +40,7 @@ impl StaffRepository for PgStaffRepository {
         let output = sqlx::query_as!(
             Staff,
             r#"
-            SELECT id, name, email, position, status as "status: _", created_at, updated_at
+            SELECT id, name, email, position, status AS "status: _", created_at, updated_at
             FROM staff
             "#
         )
@@ -56,7 +56,7 @@ impl StaffRepository for PgStaffRepository {
             r#"
             INSERT INTO staff (name, email, position) 
             VALUES ($1, $2, $3)
-            RETURNING id, name, email, position, status as "status: _", created_at, updated_at
+            RETURNING id, name, email, position, status AS "status: _", created_at, updated_at
             "#,
             staff.name,
             staff.email,
@@ -78,7 +78,7 @@ impl StaffRepository for PgStaffRepository {
             r#"
                 INSERT INTO staff(name, email, position)
                 SELECT * FROM UNNEST($1::varchar[], $2::varchar[], $3::varchar[])
-                RETURNING id, name, email, position, status as "status: _", created_at, updated_at
+                RETURNING id, name, email, position, status AS "status: _", created_at, updated_at
             "#,
             &names,
             &emails,
@@ -101,7 +101,7 @@ impl StaffRepository for PgStaffRepository {
                 status = COALESCE($5, status), 
                 updated_at = now()
             WHERE id = $1
-            RETURNING id, name, email, position, status as "status: _", created_at, updated_at
+            RETURNING id, name, email, position, status AS "status: _", created_at, updated_at
             "#,
             id,
             staff.name,
@@ -109,10 +109,10 @@ impl StaffRepository for PgStaffRepository {
             staff.position,
             staff.status as _,
         )
-        .fetch_one(&self.pool)
+        .fetch_optional(&self.pool)
         .await?;
 
-        Ok(output)
+        output.ok_or_else(|| DataServiceError::NotFound("Staff not found".to_string()))
     }
 
     async fn deactivate(&self, id: Uuid) -> Result<(), DataServiceError> {

@@ -65,8 +65,8 @@ pub enum ShiftType {
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct ScheduleJob {
     pub id: Uuid,
-    pub group_id: Uuid,
-    pub run_at: NaiveDate,
+    pub staff_group_id: Uuid,
+    pub period_begin_date: NaiveDate,
     pub status: JobStatus,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

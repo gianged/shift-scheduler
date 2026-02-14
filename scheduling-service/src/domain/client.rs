@@ -8,6 +8,6 @@ use crate::error::SchedulingServiceError;
 pub trait DataServiceClient: Send + Sync {
     async fn get_resolved_members(
         &self,
-        group_id: Uuid,
+        staff_group_id: Uuid,
     ) -> Result<Vec<Staff>, SchedulingServiceError>;
 }

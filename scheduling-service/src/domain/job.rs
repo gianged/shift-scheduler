@@ -1,16 +1,22 @@
 use async_trait::async_trait;
 use chrono::NaiveDate;
-use shared::types::{JobStatus, ScheduleJob, ShiftAssignment};
+use shared::types::{JobStatus, ScheduleJob, ShiftAssignment, ShiftType};
 use uuid::Uuid;
 
 use crate::error::SchedulingServiceError;
+
+pub struct NewShiftAssignment {
+    pub staff_id: Uuid,
+    pub date: NaiveDate,
+    pub shift_type: ShiftType,
+}
 
 #[async_trait]
 pub trait JobRepository: Send + Sync {
     async fn create_job(
         &self,
-        group_id: Uuid,
-        run_at: NaiveDate,
+        staff_group_id: Uuid,
+        period_begin_date: NaiveDate,
     ) -> Result<ScheduleJob, SchedulingServiceError>;
     async fn find_by_id(&self, id: Uuid) -> Result<Option<ScheduleJob>, SchedulingServiceError>;
     async fn update_status(
@@ -21,7 +27,7 @@ pub trait JobRepository: Send + Sync {
     async fn save_assignments(
         &self,
         job_id: Uuid,
-        assignments: Vec<ShiftAssignment>,
+        assignments: Vec<NewShiftAssignment>,
     ) -> Result<(), SchedulingServiceError>;
     async fn get_assignments(
         &self,

@@ -22,7 +22,7 @@ impl MembershipRepository for PgMembershipRepository {
         group_id: Uuid,
         staff_id: Uuid,
     ) -> Result<(), DataServiceError> {
-        sqlx::query!(
+        let output = sqlx::query!(
             r#"
             INSERT INTO group_memberships (group_id, staff_id) VALUES ($1, $2)
             "#,
@@ -30,9 +30,26 @@ impl MembershipRepository for PgMembershipRepository {
             staff_id
         )
         .execute(&self.pool)
-        .await?;
+        .await;
 
-        Ok(())
+        match output {
+            Ok(_) => Ok(()),
+            Err(sqlx::Error::Database(e)) => {
+                let msg = e.message();
+                if msg.contains("fk_gm_staff") {
+                    Err(DataServiceError::NotFound("Staff not found".to_string()))
+                } else if msg.contains("fk_gm_group") {
+                    Err(DataServiceError::NotFound("Group not found".to_string()))
+                } else if msg.contains("duplicate") || msg.contains("already exists") {
+                    Err(DataServiceError::BadRequest(
+                        "Staff already in group".to_string(),
+                    ))
+                } else {
+                    Err(sqlx::Error::Database(e).into())
+                }
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     async fn remove_staff_from_group(

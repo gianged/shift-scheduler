@@ -105,10 +105,10 @@ impl GroupRepository for PgGroupRepository {
             group.name,
             group.parent_group_id as _,
         )
-        .fetch_one(&self.pool)
+        .fetch_optional(&self.pool)
         .await?;
 
-        Ok(output)
+        output.ok_or_else(|| DataServiceError::NotFound("Group not found".to_string()))
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), DataServiceError> {
