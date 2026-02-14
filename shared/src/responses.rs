@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
+#[serde(bound(deserialize = "T: serde::de::DeserializeOwned"))]
 pub struct ApiResponse<T: Serialize> {
     pub success: bool,
     pub data: Option<T>,

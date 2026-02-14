@@ -1,0 +1,68 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH RECURSIVE group_tree AS (\n                SELECT id FROM staff_groups WHERE id = $1\n                UNION ALL\n                SELECT sg.id FROM staff_groups sg\n                JOIN group_tree gt ON sg.parent_group_id = gt.id\n            )\n            SELECT DISTINCT s.id, s.name, s.email, s.position, s.status as \"status: _\", s.created_at, s.updated_at\n            FROM staff s\n            JOIN group_memberships gm ON s.id = gm.staff_id\n            JOIN group_tree gt ON gm.group_id = gt.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "position",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "status: _",
+        "type_info": {
+          "Custom": {
+            "name": "staff_status",
+            "kind": {
+              "Enum": [
+                "ACTIVE",
+                "INACTIVE"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "cc8ea75c02de5e34730e13f7ad6611a519c2259bb76a0e65b3fa1a28cdd5d27e"
+}

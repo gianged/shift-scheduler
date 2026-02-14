@@ -9,6 +9,8 @@ COPY scheduling-service/ scheduling-service/
 COPY data-service/ data-service/
 RUN mkdir -p data-service/src && echo "fn main() {}" > data-service/src/main.rs
 
+COPY .sqlx/ .sqlx/
+ENV SQLX_OFFLINE=true
 RUN cargo build --release --bin scheduling-service
 
 FROM debian:bookworm-slim

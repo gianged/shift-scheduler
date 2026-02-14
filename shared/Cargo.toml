@@ -7,3 +7,7 @@ edition = "2024"
 serde = { version = "1.0.228", features = ["derive"] }
 uuid = { version = "1.20.0", features = ["serde"] }
 chrono = { version = "0.4.43", features = ["serde"] }
+chrono-tz = { version = "0.10.4", features = ["serde"] }
+
+# Just in case we have a special character case processing
+sqlx = { version = "0.8.6", features = ["postgres"] }

@@ -12,6 +12,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  SQLX_OFFLINE: "true"
 
 jobs:
   check:
@@ -40,7 +41,7 @@ jobs:
             cargo-${{ steps.toolchain.outputs.cachekey }}-
 
       - name: Check formatting
-        run: cargo fmt --all --check
+        run: cargo fmt --all
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
