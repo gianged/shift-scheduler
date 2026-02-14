@@ -22,4 +22,9 @@ reqwest = { version = "0.13.2", default-features = false, features = [
     "rustls",
 ] }
 async-trait = { version = "0.1.89" }
+tracing = { version = "0.1.44" }
+tower-http = { version = "0.6.8", features = ["trace"] }
+opentelemetry = { version = "0.31.0", features = ["trace"] }
+opentelemetry-http = { version = "0.31.0" }
+tracing-opentelemetry = { version = "0.32.1" }
 shared = { path = "../shared" }

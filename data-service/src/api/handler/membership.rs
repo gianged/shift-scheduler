@@ -13,11 +13,12 @@ use uuid::Uuid;
 
 use crate::{api::state::DataServiceAppState, error::DataServiceError};
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct AddMemberRequest {
     pub staff_id: Uuid,
 }
 
+#[tracing::instrument(skip(state))]
 pub async fn add_member(
     State(state): State<Arc<DataServiceAppState>>,
     Path(group_id): Path<Uuid>,
@@ -31,6 +32,7 @@ pub async fn add_member(
     Ok(Json(ApiResponse::ok(())))
 }
 
+#[tracing::instrument(skip(state))]
 pub async fn remove_member(
     State(state): State<Arc<DataServiceAppState>>,
     Path((group_id, staff_id)): Path<(Uuid, Uuid)>,
@@ -43,6 +45,7 @@ pub async fn remove_member(
     Ok(Json(ApiResponse::ok(())))
 }
 
+#[tracing::instrument(skip(state))]
 pub async fn get_group_members(
     State(state): State<Arc<DataServiceAppState>>,
     Path(group_id): Path<Uuid>,
@@ -52,6 +55,7 @@ pub async fn get_group_members(
     Ok(Json(ApiResponse::ok(output)))
 }
 
+#[tracing::instrument(skip(state))]
 pub async fn get_staff_groups(
     State(state): State<Arc<DataServiceAppState>>,
     Path(staff_id): Path<Uuid>,
@@ -61,6 +65,7 @@ pub async fn get_staff_groups(
     Ok(Json(ApiResponse::ok(output)))
 }
 
+#[tracing::instrument(skip(state))]
 pub async fn resolve_members(
     State(state): State<Arc<DataServiceAppState>>,
     Path(group_id): Path<Uuid>,

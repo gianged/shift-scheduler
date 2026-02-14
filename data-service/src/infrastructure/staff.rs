@@ -20,6 +20,7 @@ impl PgStaffRepository {
 
 #[async_trait]
 impl StaffRepository for PgStaffRepository {
+    #[tracing::instrument(skip(self))]
     async fn find_by_id(&self, id: Uuid) -> Result<Option<Staff>, DataServiceError> {
         let output = sqlx::query_as!(
             Staff,
@@ -36,6 +37,7 @@ impl StaffRepository for PgStaffRepository {
         Ok(output)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn find_all(&self) -> Result<Vec<Staff>, DataServiceError> {
         let output = sqlx::query_as!(
             Staff,
@@ -50,11 +52,12 @@ impl StaffRepository for PgStaffRepository {
         Ok(output)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn create(&self, staff: CreateStaff) -> Result<Staff, DataServiceError> {
         let output = sqlx::query_as!(
             Staff,
             r#"
-            INSERT INTO staff (name, email, position) 
+            INSERT INTO staff (name, email, position)
             VALUES ($1, $2, $3)
             RETURNING id, name, email, position, status AS "status: _", created_at, updated_at
             "#,
@@ -68,6 +71,7 @@ impl StaffRepository for PgStaffRepository {
         Ok(output)
     }
 
+    #[tracing::instrument(skip(self, staffs))]
     async fn batch_create(&self, staffs: Vec<CreateStaff>) -> Result<Vec<Staff>, DataServiceError> {
         let names: Vec<String> = staffs.iter().map(|s| s.name.clone()).collect();
         let emails: Vec<String> = staffs.iter().map(|s| s.email.clone()).collect();
@@ -90,15 +94,16 @@ impl StaffRepository for PgStaffRepository {
         Ok(output)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn update(&self, id: Uuid, staff: UpdateStaff) -> Result<Staff, DataServiceError> {
         let output = sqlx::query_as!(
             Staff,
             r#"
             UPDATE staff
-            SET name = COALESCE($2, name), 
-                email = COALESCE($3,email), 
-                position = COALESCE($4, position), 
-                status = COALESCE($5, status), 
+            SET name = COALESCE($2, name),
+                email = COALESCE($3,email),
+                position = COALESCE($4, position),
+                status = COALESCE($5, status),
                 updated_at = now()
             WHERE id = $1
             RETURNING id, name, email, position, status AS "status: _", created_at, updated_at
@@ -115,6 +120,7 @@ impl StaffRepository for PgStaffRepository {
         output.ok_or_else(|| DataServiceError::NotFound("Staff not found".to_string()))
     }
 
+    #[tracing::instrument(skip(self))]
     async fn deactivate(&self, id: Uuid) -> Result<(), DataServiceError> {
         let output = sqlx::query!(
             r#"
@@ -134,6 +140,7 @@ impl StaffRepository for PgStaffRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn delete(&self, id: Uuid) -> Result<(), DataServiceError> {
         let output = sqlx::query!(
             r#"

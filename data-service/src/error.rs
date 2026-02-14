@@ -36,6 +36,12 @@ impl IntoResponse for DataServiceError {
             ),
         };
 
+        if status.is_server_error() {
+            tracing::error!(error = %self, %status, "Server error");
+        } else {
+            tracing::warn!(error = %self, %status, "Client error");
+        }
+
         let body = ApiResponse::<()>::err(message);
         (status, axum::Json(body)).into_response()
     }

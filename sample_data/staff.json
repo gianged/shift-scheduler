@@ -1,0 +1,8 @@
+[
+  { "name": "A Nguyen", "email": "a@example.com", "position": "Staff" },
+  { "name": "B Tran", "email": "b@example.com", "position": "Manager" },
+  { "name": "C Le", "email": "c@example.com", "position": "Staff" },
+  { "name": "D Pham", "email": "d@example.com", "position": "Staff" },
+  { "name": "E Hoang", "email": "e@example.com", "position": "Manager" },
+  { "name": "F Vo", "email": "f@example.com", "position": "Staff" }
+]

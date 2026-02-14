@@ -17,6 +17,7 @@ impl PgMembershipRepository {
 
 #[async_trait]
 impl MembershipRepository for PgMembershipRepository {
+    #[tracing::instrument(skip(self))]
     async fn add_staff_to_group(
         &self,
         group_id: Uuid,
@@ -52,6 +53,7 @@ impl MembershipRepository for PgMembershipRepository {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     async fn remove_staff_from_group(
         &self,
         group_id: Uuid,
@@ -77,6 +79,7 @@ impl MembershipRepository for PgMembershipRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_group_members(&self, group_id: Uuid) -> Result<Vec<Staff>, DataServiceError> {
         let output = sqlx::query_as!(
             Staff,
@@ -94,6 +97,7 @@ impl MembershipRepository for PgMembershipRepository {
         Ok(output)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_staff_groups(&self, staff_id: Uuid) -> Result<Vec<StaffGroup>, DataServiceError> {
         let output = sqlx::query_as!(
             StaffGroup,
@@ -111,6 +115,7 @@ impl MembershipRepository for PgMembershipRepository {
         Ok(output)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn resolve_members(&self, group_id: Uuid) -> Result<Vec<Staff>, DataServiceError> {
         let output = sqlx::query_as!(
             Staff,

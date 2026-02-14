@@ -1,6 +1,6 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(bound(deserialize = "T: serde::de::DeserializeOwned"))]
 pub struct ApiResponse<T: Serialize> {
     pub success: bool,

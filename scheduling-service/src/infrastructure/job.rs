@@ -21,6 +21,7 @@ impl PgJobRepository {
 
 #[async_trait]
 impl JobRepository for PgJobRepository {
+    #[tracing::instrument(skip(self))]
     async fn create_job(
         &self,
         staff_group_id: Uuid,
@@ -41,6 +42,7 @@ impl JobRepository for PgJobRepository {
         Ok(output)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn find_by_id(&self, id: Uuid) -> Result<Option<ScheduleJob>, SchedulingServiceError> {
         let output = sqlx::query_as!(
             ScheduleJob,
@@ -57,6 +59,7 @@ impl JobRepository for PgJobRepository {
         Ok(output)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn update_status(
         &self,
         id: Uuid,
@@ -83,6 +86,7 @@ impl JobRepository for PgJobRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, assignments))]
     async fn save_assignments(
         &self,
         job_id: Uuid,
@@ -110,6 +114,7 @@ impl JobRepository for PgJobRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_assignments(
         &self,
         job_id: Uuid,

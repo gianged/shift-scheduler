@@ -13,6 +13,7 @@ use crate::{
     error::DataServiceError,
 };
 
+#[tracing::instrument(skip(state))]
 pub async fn find_all(
     State(state): State<Arc<DataServiceAppState>>,
 ) -> Result<Json<ApiResponse<Vec<StaffGroup>>>, DataServiceError> {
@@ -21,6 +22,7 @@ pub async fn find_all(
     Ok(Json(ApiResponse::ok(output)))
 }
 
+#[tracing::instrument(skip(state))]
 pub async fn find_by_id(
     State(state): State<Arc<DataServiceAppState>>,
     Path(id): Path<Uuid>,
@@ -33,6 +35,7 @@ pub async fn find_by_id(
     }
 }
 
+#[tracing::instrument(skip(state))]
 pub async fn create(
     State(state): State<Arc<DataServiceAppState>>,
     Json(group): Json<CreateGroup>,
@@ -42,6 +45,7 @@ pub async fn create(
     Ok(Json(ApiResponse::ok(output)))
 }
 
+#[tracing::instrument(skip(state))]
 pub async fn batch_create(
     State(state): State<Arc<DataServiceAppState>>,
     Json(groups): Json<Vec<CreateGroup>>,
@@ -51,6 +55,7 @@ pub async fn batch_create(
     Ok(Json(ApiResponse::ok(output)))
 }
 
+#[tracing::instrument(skip(state))]
 pub async fn update(
     State(state): State<Arc<DataServiceAppState>>,
     Path(id): Path<Uuid>,
@@ -61,6 +66,7 @@ pub async fn update(
     Ok(Json(ApiResponse::ok(output)))
 }
 
+#[tracing::instrument(skip(state))]
 pub async fn delete(
     State(state): State<Arc<DataServiceAppState>>,
     Path(id): Path<Uuid>,

@@ -14,9 +14,12 @@ use data_service::{
 use sqlx::postgres::PgPoolOptions;
 use std::{env, sync::Arc};
 use tokio::net::TcpListener;
+use tower_http::trace::TraceLayer;
 
 #[tokio::main]
 async fn main() {
+    let _guard = shared::telemetry::init_telemetry("data-service");
+
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let port = env::var("SERVER_PORT").unwrap_or_else(|_| "8080".to_string());
 
@@ -75,7 +78,10 @@ async fn main() {
             "/api/v1/staff/{id}/groups",
             get(membership::get_staff_groups),
         )
+        .layer(TraceLayer::new_for_http())
         .with_state(state);
+
+    tracing::info!("data-service listening on 0.0.0.0:{port}");
 
     let listener = TcpListener::bind(format!("0.0.0.0:{port}"))
         .await

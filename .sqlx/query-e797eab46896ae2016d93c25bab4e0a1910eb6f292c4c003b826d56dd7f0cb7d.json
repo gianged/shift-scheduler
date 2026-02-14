@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO staff (name, email, position) \n            VALUES ($1, $2, $3)\n            RETURNING id, name, email, position, status AS \"status: _\", created_at, updated_at\n            ",
+  "query": "\n            UPDATE staff\n            SET name = COALESCE($2, name),\n                email = COALESCE($3,email),\n                position = COALESCE($4, position),\n                status = COALESCE($5, status),\n                updated_at = now()\n            WHERE id = $1\n            RETURNING id, name, email, position, status AS \"status: _\", created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -51,9 +51,21 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Varchar",
         "Varchar",
-        "Varchar"
+        "Varchar",
+        {
+          "Custom": {
+            "name": "staff_status",
+            "kind": {
+              "Enum": [
+                "ACTIVE",
+                "INACTIVE"
+              ]
+            }
+          }
+        }
       ]
     },
     "nullable": [
@@ -66,5 +78,5 @@
       false
     ]
   },
-  "hash": "467901fa59b39c37b81147138e91e51678ec05d544f025c573ae20d3d65379e1"
+  "hash": "e797eab46896ae2016d93c25bab4e0a1910eb6f292c4c003b826d56dd7f0cb7d"
 }
