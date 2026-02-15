@@ -8,13 +8,20 @@ use data_service::{
         state::DataServiceAppState,
     },
     infrastructure::{
-        group::PgGroupRepository, membership::PgMembershipRepository, staff::PgStaffRepository,
+        cache::{
+            client::RedisCache, group::CachedGroupRepository,
+            membership::CachedMembershipRepository, staff::CachedStaffRepository,
+        },
+        group::PgGroupRepository,
+        membership::PgMembershipRepository,
+        staff::PgStaffRepository,
     },
 };
 use sqlx::postgres::PgPoolOptions;
 use std::{env, sync::Arc};
 use tokio::net::TcpListener;
-use tower_http::trace::TraceLayer;
+use tower_http::trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 
 #[tokio::main]
 async fn main() {
@@ -34,10 +41,24 @@ async fn main() {
         .await
         .expect("Failed to run database migrations");
 
+    let redis_url = env::var("REDIS_URL").expect("REDIS_URL must be set");
+    let cache = RedisCache::new(&redis_url)
+        .await
+        .expect("Failed to connect to Redis");
+
     let state = Arc::new(DataServiceAppState {
-        staff_repo: Arc::new(PgStaffRepository::new(pool.clone())),
-        group_repo: Arc::new(PgGroupRepository::new(pool.clone())),
-        membership_repo: Arc::new(PgMembershipRepository::new(pool.clone())),
+        staff_repo: Arc::new(CachedStaffRepository::new(
+            Arc::new(PgStaffRepository::new(pool.clone())),
+            cache.clone(),
+        )),
+        group_repo: Arc::new(CachedGroupRepository::new(
+            Arc::new(PgGroupRepository::new(pool.clone())),
+            cache.clone(),
+        )),
+        membership_repo: Arc::new(CachedMembershipRepository::new(
+            Arc::new(PgMembershipRepository::new(pool.clone())),
+            cache,
+        )),
     });
 
     let app = Router::new()
@@ -78,7 +99,15 @@ async fn main() {
             "/api/v1/staff/{id}/groups",
             get(membership::get_staff_groups),
         )
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http()
+                .on_request(DefaultOnRequest::new().level(Level::INFO))
+                .on_response(
+                    DefaultOnResponse::new()
+                        .level(Level::INFO)
+                        .latency_unit(tower_http::LatencyUnit::Millis),
+                ),
+        )
         .with_state(state);
 
     tracing::info!("data-service listening on 0.0.0.0:{port}");
