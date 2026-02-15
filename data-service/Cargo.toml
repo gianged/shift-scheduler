@@ -3,6 +3,9 @@ name = "data-service"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+test-support = ["dep:mockall"]
+
 [dependencies]
 axum = { version = "0.8.8" }
 tokio = { version = "1.49.0", features = ["full"] }
@@ -18,7 +21,17 @@ serde_json = { version = "1.0.149" }
 uuid = { version = "1.21.0", features = ["serde"] }
 thiserror = { version = "2.0.18" }
 async-trait = { version = "0.1.89" }
+mockall = { version = "0.14", optional = true }
 tracing = { version = "0.1.44" }
 tower-http = { version = "0.6.8", features = ["trace"] }
 redis = { version = "1.0.3", features = ["tokio-comp", "connection-manager"] }
+utoipa = { version = "5.4.0", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
 shared = { path = "../shared" }
+
+[dev-dependencies]
+data-service = { path = ".", features = ["test-support"] }
+tokio = { version = "1.49.0", features = ["full", "test-util"] }
+tower = { version = "0.5.3", features = ["util"] }
+http-body-util = { version = "0.1.3" }
+uuid = { version = "1.21.0", features = ["serde", "v4"] }

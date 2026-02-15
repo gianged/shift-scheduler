@@ -22,6 +22,38 @@ use std::{env, sync::Arc};
 use tokio::net::TcpListener;
 use tower_http::trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        staff::find_all,
+        staff::create,
+        staff::batch_create,
+        staff::find_by_id,
+        staff::update,
+        staff::deactivate,
+        staff::delete,
+        group::find_all,
+        group::create,
+        group::batch_create,
+        group::find_by_id,
+        group::update,
+        group::delete,
+        membership::add_member,
+        membership::remove_member,
+        membership::get_group_members,
+        membership::get_staff_groups,
+        membership::resolve_members,
+    ),
+    tags(
+        (name = "Staff", description = "Staff management"),
+        (name = "Groups", description = "Staff group management"),
+        (name = "Membership", description = "Group membership management"),
+    )
+)]
+struct ApiDoc;
 
 #[tokio::main]
 async fn main() {
@@ -62,6 +94,14 @@ async fn main() {
     });
 
     let app = Router::new()
+        .route(
+            "/headpat",
+            get(|| async {
+                axum::Json(shared::responses::HeadpatResponse {
+                    message: "nyaa~! all systems operational, senpai! (=^-w-^=)",
+                })
+            }),
+        )
         // Staff routes
         .route("/api/v1/staff", get(staff::find_all).post(staff::create))
         .route("/api/v1/staff/batch", post(staff::batch_create))
@@ -99,6 +139,9 @@ async fn main() {
             "/api/v1/staff/{id}/groups",
             get(membership::get_staff_groups),
         )
+        // Swagger UI
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        // tracing log (turn request into info level)
         .layer(
             TraceLayer::new_for_http()
                 .on_request(DefaultOnRequest::new().level(Level::INFO))
@@ -117,6 +160,9 @@ async fn main() {
         .expect("Failed to bind");
 
     axum::serve(listener, app)
+        .with_graceful_shutdown(shared::shutdown::shutdown_signal())
         .await
         .expect("Oppsie! Server crashed!");
+
+    tracing::info!("data-service shut down");
 }

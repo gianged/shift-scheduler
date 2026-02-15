@@ -4,7 +4,10 @@ use axum::{
     Json,
     extract::{Path, State},
 };
-use shared::{responses::ApiResponse, types::StaffGroup};
+use shared::{
+    responses::{ApiResponse, EmptyApiResponse},
+    types::StaffGroup,
+};
 use uuid::Uuid;
 
 use crate::{
@@ -13,6 +16,14 @@ use crate::{
     error::DataServiceError,
 };
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/groups",
+    tag = "Groups",
+    responses(
+        (status = 200, description = "List all groups", body = ApiResponse<Vec<StaffGroup>>)
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn find_all(
     State(state): State<Arc<DataServiceAppState>>,
@@ -22,6 +33,18 @@ pub async fn find_all(
     Ok(Json(ApiResponse::ok(output)))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/groups/{id}",
+    tag = "Groups",
+    params(
+        ("id" = Uuid, Path, description = "Group ID")
+    ),
+    responses(
+        (status = 200, description = "Group found", body = ApiResponse<StaffGroup>),
+        (status = 404, description = "Group not found")
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn find_by_id(
     State(state): State<Arc<DataServiceAppState>>,
@@ -35,6 +58,15 @@ pub async fn find_by_id(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/groups",
+    tag = "Groups",
+    request_body = CreateGroup,
+    responses(
+        (status = 200, description = "Group created", body = ApiResponse<StaffGroup>)
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn create(
     State(state): State<Arc<DataServiceAppState>>,
@@ -45,6 +77,15 @@ pub async fn create(
     Ok(Json(ApiResponse::ok(output)))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/groups/batch",
+    tag = "Groups",
+    request_body = Vec<CreateGroup>,
+    responses(
+        (status = 200, description = "Groups batch created", body = ApiResponse<Vec<StaffGroup>>)
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn batch_create(
     State(state): State<Arc<DataServiceAppState>>,
@@ -55,6 +96,18 @@ pub async fn batch_create(
     Ok(Json(ApiResponse::ok(output)))
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/v1/groups/{id}",
+    tag = "Groups",
+    params(
+        ("id" = Uuid, Path, description = "Group ID")
+    ),
+    request_body = UpdateGroup,
+    responses(
+        (status = 200, description = "Group updated", body = ApiResponse<StaffGroup>)
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn update(
     State(state): State<Arc<DataServiceAppState>>,
@@ -66,6 +119,17 @@ pub async fn update(
     Ok(Json(ApiResponse::ok(output)))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/groups/{id}",
+    tag = "Groups",
+    params(
+        ("id" = Uuid, Path, description = "Group ID")
+    ),
+    responses(
+        (status = 200, description = "Group deleted", body = EmptyApiResponse)
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn delete(
     State(state): State<Arc<DataServiceAppState>>,

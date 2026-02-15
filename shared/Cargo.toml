@@ -8,11 +8,15 @@ serde = { version = "1.0.228", features = ["derive"] }
 uuid = { version = "1.21.0", features = ["serde"] }
 chrono = { version = "0.4.43", features = ["serde"] }
 chrono-tz = { version = "0.10.4", features = ["serde"] }
+utoipa = { version = "5.4.0", features = ["uuid", "chrono"] }
 
 # Just in case we have a special character case processing
 sqlx = { version = "0.8.6", features = ["postgres"] }
 
-# Telemetry
+tokio = { version = "1.49.0", features = ["signal"] }
+
+
+# Tracing
 tracing = { version = "0.1.44" }
 tracing-subscriber = { version = "0.3.22", features = [
     "env-filter",

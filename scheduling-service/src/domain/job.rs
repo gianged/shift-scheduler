@@ -11,6 +11,7 @@ pub struct NewShiftAssignment {
     pub shift_type: ShiftType,
 }
 
+#[cfg_attr(feature = "test-support", mockall::automock)]
 #[async_trait]
 pub trait JobRepository: Send + Sync {
     async fn create_job(
@@ -33,4 +34,9 @@ pub trait JobRepository: Send + Sync {
         &self,
         job_id: Uuid,
     ) -> Result<Vec<ShiftAssignment>, SchedulingServiceError>;
+    async fn find_by_status(
+        &self,
+        status: JobStatus,
+    ) -> Result<Vec<ScheduleJob>, SchedulingServiceError>;
+    async fn delete_assignments(&self, job_id: Uuid) -> Result<(), SchedulingServiceError>;
 }

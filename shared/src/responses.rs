@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(bound(deserialize = "T: serde::de::DeserializeOwned"))]
 pub struct ApiResponse<T: Serialize> {
     pub success: bool,
@@ -24,4 +25,15 @@ impl<T: Serialize> ApiResponse<T> {
             error: Some(error_msg.into()),
         }
     }
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct EmptyApiResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct HeadpatResponse {
+    pub message: &'static str,
 }

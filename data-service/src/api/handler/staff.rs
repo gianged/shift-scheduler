@@ -4,7 +4,10 @@ use axum::{
     Json,
     extract::{Path, State},
 };
-use shared::{responses::ApiResponse, types::Staff};
+use shared::{
+    responses::{ApiResponse, EmptyApiResponse},
+    types::Staff,
+};
 use uuid::Uuid;
 
 use crate::{
@@ -13,6 +16,14 @@ use crate::{
     error::DataServiceError,
 };
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/staff",
+    tag = "Staff",
+    responses(
+        (status = 200, description = "List all staff", body = ApiResponse<Vec<Staff>>)
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn find_all(
     State(state): State<Arc<DataServiceAppState>>,
@@ -21,6 +32,18 @@ pub async fn find_all(
     Ok(Json(ApiResponse::ok(output)))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/staff/{id}",
+    tag = "Staff",
+    params(
+        ("id" = Uuid, Path, description = "Staff ID")
+    ),
+    responses(
+        (status = 200, description = "Staff found", body = ApiResponse<Staff>),
+        (status = 404, description = "Staff not found")
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn find_by_id(
     State(state): State<Arc<DataServiceAppState>>,
@@ -34,6 +57,15 @@ pub async fn find_by_id(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/staff",
+    tag = "Staff",
+    request_body = CreateStaff,
+    responses(
+        (status = 200, description = "Staff created", body = ApiResponse<Staff>)
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn create(
     State(state): State<Arc<DataServiceAppState>>,
@@ -44,6 +76,15 @@ pub async fn create(
     Ok(Json(ApiResponse::ok(output)))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/staff/batch",
+    tag = "Staff",
+    request_body = Vec<CreateStaff>,
+    responses(
+        (status = 200, description = "Staff batch created", body = ApiResponse<Vec<Staff>>)
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn batch_create(
     State(state): State<Arc<DataServiceAppState>>,
@@ -54,6 +95,18 @@ pub async fn batch_create(
     Ok(Json(ApiResponse::ok(output)))
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/v1/staff/{id}",
+    tag = "Staff",
+    params(
+        ("id" = Uuid, Path, description = "Staff ID")
+    ),
+    request_body = UpdateStaff,
+    responses(
+        (status = 200, description = "Staff updated", body = ApiResponse<Staff>)
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn update(
     State(state): State<Arc<DataServiceAppState>>,
@@ -65,6 +118,17 @@ pub async fn update(
     Ok(Json(ApiResponse::ok(output)))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/v1/staff/{id}/deactivate",
+    tag = "Staff",
+    params(
+        ("id" = Uuid, Path, description = "Staff ID")
+    ),
+    responses(
+        (status = 200, description = "Staff deactivated", body = EmptyApiResponse)
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn deactivate(
     State(state): State<Arc<DataServiceAppState>>,
@@ -75,6 +139,17 @@ pub async fn deactivate(
     Ok(Json(ApiResponse::ok(())))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/staff/{id}",
+    tag = "Staff",
+    params(
+        ("id" = Uuid, Path, description = "Staff ID")
+    ),
+    responses(
+        (status = 200, description = "Staff deleted", body = EmptyApiResponse)
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn delete(
     State(state): State<Arc<DataServiceAppState>>,

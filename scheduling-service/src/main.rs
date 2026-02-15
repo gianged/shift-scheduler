@@ -12,6 +12,21 @@ use std::{env, sync::Arc};
 use tokio::net::TcpListener;
 use tower_http::trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        schedule::submit_schedule,
+        schedule::get_status,
+        schedule::get_result,
+    ),
+    tags(
+        (name = "Schedules", description = "Schedule job management"),
+    )
+)]
+struct ApiDoc;
 
 #[tokio::main]
 async fn main() {
@@ -39,9 +54,23 @@ async fn main() {
 
     let scheduling_service = Arc::new(SchedulingService::new(job_repo, data_client, config));
 
-    let state = Arc::new(SchedulingAppState { scheduling_service });
+    if let Err(e) = scheduling_service.recover_stale_jobs().await {
+        tracing::warn!("Failed to recover stale jobs: {e}");
+    }
+
+    let state = Arc::new(SchedulingAppState {
+        scheduling_service: scheduling_service.clone(),
+    });
 
     let app = Router::new()
+        .route(
+            "/headpat",
+            get(|| async {
+                axum::Json(shared::responses::HeadpatResponse {
+                    message: "nyaa~! all systems operational, senpai! (=^-w-^=)",
+                })
+            }),
+        )
         .route("/api/v1/schedules", post(schedule::submit_schedule))
         .route(
             "/api/v1/schedules/{schedule_id}/status",
@@ -51,6 +80,9 @@ async fn main() {
             "/api/v1/schedules/{schedule_id}/result",
             get(schedule::get_result),
         )
+        // Swagger UI
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        // tracing log (turn request into info level)
         .layer(
             TraceLayer::new_for_http()
                 .on_request(DefaultOnRequest::new().level(Level::INFO))
@@ -69,6 +101,22 @@ async fn main() {
         .expect("Failed to bind");
 
     axum::serve(listener, app)
+        .with_graceful_shutdown(shared::shutdown::shutdown_signal())
         .await
         .expect("Oppsie! Server crashed!");
+
+    // Server stopped accepting new requests; wait for in-flight background jobs
+    let task_tracker = scheduling_service.task_tracker();
+    task_tracker.close();
+    tracing::info!("Waiting for background jobs to finish...");
+    if tokio::time::timeout(
+        shared::shutdown::DEFAULT_SHUTDOWN_TIMEOUT,
+        task_tracker.wait(),
+    )
+    .await
+    .is_err()
+    {
+        tracing::warn!("Shutdown timeout reached, some background jobs may not have finished");
+    }
+    tracing::info!("scheduling-service shut down");
 }

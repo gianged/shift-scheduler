@@ -9,16 +9,26 @@ use axum::{
 use chrono::NaiveDate;
 use serde::Deserialize;
 use shared::responses::ApiResponse;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{api::state::SchedulingAppState, error::SchedulingServiceError};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateScheduleRequest {
     pub staff_group_id: Uuid,
     pub period_begin_date: NaiveDate,
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/schedules",
+    tag = "Schedules",
+    request_body = CreateScheduleRequest,
+    responses(
+        (status = 202, description = "Schedule job submitted", body = ApiResponse<shared::types::ScheduleJob>)
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn submit_schedule(
     State(state): State<Arc<SchedulingAppState>>,
@@ -32,6 +42,17 @@ pub async fn submit_schedule(
     Ok((StatusCode::ACCEPTED, Json(ApiResponse::ok(job))))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/schedules/{schedule_id}/status",
+    tag = "Schedules",
+    params(
+        ("schedule_id" = Uuid, Path, description = "Schedule job ID")
+    ),
+    responses(
+        (status = 200, description = "Schedule job status", body = ApiResponse<shared::types::ScheduleJob>)
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn get_status(
     State(state): State<Arc<SchedulingAppState>>,
@@ -42,6 +63,17 @@ pub async fn get_status(
     Ok(Json(ApiResponse::ok(job)))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/schedules/{schedule_id}/result",
+    tag = "Schedules",
+    params(
+        ("schedule_id" = Uuid, Path, description = "Schedule job ID")
+    ),
+    responses(
+        (status = 200, description = "Schedule result with shift assignments", body = ApiResponse<Vec<shared::types::ShiftAssignment>>)
+    )
+)]
 #[tracing::instrument(skip(state))]
 pub async fn get_result(
     State(state): State<Arc<SchedulingAppState>>,

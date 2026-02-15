@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::error::DataServiceError;
 
+#[cfg_attr(feature = "test-support", mockall::automock)]
 #[async_trait]
 pub trait MembershipRepository: Send + Sync {
     async fn add_staff_to_group(
