@@ -33,6 +33,12 @@ pub async fn add_member(
     Path(group_id): Path<Uuid>,
     Json(body): Json<AddMembership>,
 ) -> Result<Json<ApiResponse<()>>, DataServiceError> {
+    if body.group_id != group_id {
+        return Err(DataServiceError::BadRequest(
+            "Body group_id does not match path group_id".to_string(),
+        ));
+    }
+
     state
         .membership_repo
         .add_staff_to_group(group_id, body.staff_id)
