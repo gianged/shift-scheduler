@@ -1,18 +1,19 @@
 use async_trait::async_trait;
 use serde::Deserialize;
 use shared::types::{Staff, StaffStatus};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::error::DataServiceError;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateStaff {
     pub name: String,
     pub email: String,
     pub position: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateStaff {
     pub name: Option<String>,
     pub email: Option<String>,
@@ -20,6 +21,7 @@ pub struct UpdateStaff {
     pub status: Option<StaffStatus>,
 }
 
+#[cfg_attr(feature = "test-support", mockall::automock)]
 #[async_trait]
 pub trait StaffRepository: Send + Sync {
     async fn find_by_id(&self, id: Uuid) -> Result<Option<Staff>, DataServiceError>;

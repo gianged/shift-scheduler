@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::error::SchedulingServiceError;
 
+#[cfg_attr(feature = "test-support", mockall::automock)]
 #[async_trait]
 pub trait DataServiceClient: Send + Sync {
     async fn get_resolved_members(

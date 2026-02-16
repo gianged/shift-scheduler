@@ -5,9 +5,31 @@ edition = "2024"
 
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
-uuid = { version = "1.20.0", features = ["serde"] }
+uuid = { version = "1.21.0", features = ["serde"] }
 chrono = { version = "0.4.43", features = ["serde"] }
 chrono-tz = { version = "0.10.4", features = ["serde"] }
+utoipa = { version = "5.4.0", features = ["uuid", "chrono"] }
 
 # Just in case we have a special character case processing
 sqlx = { version = "0.8.6", features = ["postgres"] }
+
+tokio = { version = "1.49.0", features = ["signal"] }
+
+
+# Tracing
+tracing = { version = "0.1.44" }
+tracing-subscriber = { version = "0.3.22", features = [
+    "env-filter",
+    "json",
+    "fmt",
+    "registry",
+] }
+tracing-opentelemetry = { version = "0.32.1" }
+opentelemetry = { version = "0.31.0", features = ["trace"] }
+opentelemetry_sdk = { version = "0.31.0", features = ["trace", "rt-tokio"] }
+opentelemetry-otlp = { version = "0.31.0", default-features = false, features = [
+    "trace",
+    "http-proto",
+    "reqwest-blocking-client",
+    "reqwest-rustls",
+] }

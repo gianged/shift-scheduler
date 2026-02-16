@@ -1,0 +1,8 @@
+# Timezone for date validation (ex: "Asia/Ho_Chi_Minh", "US/Eastern")
+# Falls back to "UTC" if omitted or invalid
+timezone = "Asia/Ho_Chi_Minh"
+
+min_day_off_per_week = 1
+max_day_off_per_week = 2
+no_morning_after_evening = true
+max_daily_shift_diff = 1

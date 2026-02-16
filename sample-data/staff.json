@@ -1,0 +1,8 @@
+[
+  { "name": "An Nguyen", "email": "an@example.com", "position": "Store Manager" },
+  { "name": "Binh Tran", "email": "binh@example.com", "position": "Shift Lead" },
+  { "name": "Chi Le", "email": "chi@example.com", "position": "Cashier" },
+  { "name": "Duc Pham", "email": "duc@example.com", "position": "Cashier" },
+  { "name": "Gia Vo", "email": "gia@example.com", "position": "Cashier" },
+  { "name": "Hung Hoang", "email": "em@example.com", "position": "Stock Clerk" }
+]

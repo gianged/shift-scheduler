@@ -20,6 +20,7 @@ impl PgGroupRepository {
 
 #[async_trait]
 impl GroupRepository for PgGroupRepository {
+    #[tracing::instrument(skip(self))]
     async fn find_by_id(&self, id: Uuid) -> Result<Option<StaffGroup>, DataServiceError> {
         let output = sqlx::query_as!(
             StaffGroup,
@@ -36,6 +37,7 @@ impl GroupRepository for PgGroupRepository {
         Ok(output)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn find_all(&self) -> Result<Vec<StaffGroup>, DataServiceError> {
         let output = sqlx::query_as!(
             StaffGroup,
@@ -50,12 +52,13 @@ impl GroupRepository for PgGroupRepository {
         Ok(output)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn create(&self, group: CreateGroup) -> Result<StaffGroup, DataServiceError> {
         let output = sqlx::query_as!(
             StaffGroup,
             r#"
-            INSERT INTO staff_groups (name, parent_group_id) 
-            VALUES ($1, $2) 
+            INSERT INTO staff_groups (name, parent_group_id)
+            VALUES ($1, $2)
             RETURNING id, name, parent_group_id, created_at, updated_at
             "#,
             group.name,
@@ -67,6 +70,7 @@ impl GroupRepository for PgGroupRepository {
         Ok(output)
     }
 
+    #[tracing::instrument(skip(self, groups))]
     async fn batch_create(
         &self,
         groups: Vec<CreateGroup>,
@@ -90,15 +94,16 @@ impl GroupRepository for PgGroupRepository {
         Ok(output)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn update(&self, id: Uuid, group: UpdateGroup) -> Result<StaffGroup, DataServiceError> {
         let output = sqlx::query_as!(
             StaffGroup,
-            r#" 
-            UPDATE staff_groups 
-            SET name = COALESCE($2, name), 
-                parent_group_id = COALESCE($3, parent_group_id), 
-                updated_at = now() 
-            WHERE id = $1 
+            r#"
+            UPDATE staff_groups
+            SET name = COALESCE($2, name),
+                parent_group_id = COALESCE($3, parent_group_id),
+                updated_at = now()
+            WHERE id = $1
             RETURNING id, name, parent_group_id, created_at, updated_at
             "#,
             id,
@@ -111,6 +116,7 @@ impl GroupRepository for PgGroupRepository {
         output.ok_or_else(|| DataServiceError::NotFound("Group not found".to_string()))
     }
 
+    #[tracing::instrument(skip(self))]
     async fn delete(&self, id: Uuid) -> Result<(), DataServiceError> {
         let output = sqlx::query!(
             r#"
