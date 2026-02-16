@@ -184,7 +184,3 @@ cargo clippy --workspace --all-targets -- -D warnings
   ## Future Work/On-Planning
 
 - **Circuit breaker** for Data Service calls -- would prevent cascade failures when data-service is unavailable by failing fast and auto-recovering after a configurable timeout. The decorator pattern (same approach as `CachedRepository`) makes this straightforward to add.
-
-## Bugs
-
-- Note that in Swagger UI, the staff > find_all route would curl /api/v1/group instead (probably due to Swagger UI bugged when there is 2 schema having almost same names), if you curl /api/v1/staff manually it will do just fine.

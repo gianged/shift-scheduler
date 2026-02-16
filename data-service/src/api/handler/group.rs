@@ -20,6 +20,7 @@ use crate::{
     get,
     path = "/api/v1/groups",
     tag = "Groups",
+    operation_id = "list_groups",
     responses(
         (status = 200, description = "List all groups", body = ApiResponse<Vec<StaffGroup>>)
     )
@@ -37,6 +38,7 @@ pub async fn find_all(
     get,
     path = "/api/v1/groups/{id}",
     tag = "Groups",
+    operation_id = "get_group",
     params(
         ("id" = Uuid, Path, description = "Group ID")
     ),
@@ -62,6 +64,7 @@ pub async fn find_by_id(
     post,
     path = "/api/v1/groups",
     tag = "Groups",
+    operation_id = "create_group",
     request_body = CreateGroup,
     responses(
         (status = 200, description = "Group created", body = ApiResponse<StaffGroup>)
@@ -81,6 +84,7 @@ pub async fn create(
     post,
     path = "/api/v1/groups/batch",
     tag = "Groups",
+    operation_id = "batch_create_groups",
     request_body = Vec<CreateGroup>,
     responses(
         (status = 200, description = "Groups batch created", body = ApiResponse<Vec<StaffGroup>>)
@@ -100,6 +104,7 @@ pub async fn batch_create(
     put,
     path = "/api/v1/groups/{id}",
     tag = "Groups",
+    operation_id = "update_group",
     params(
         ("id" = Uuid, Path, description = "Group ID")
     ),
@@ -123,6 +128,7 @@ pub async fn update(
     delete,
     path = "/api/v1/groups/{id}",
     tag = "Groups",
+    operation_id = "delete_group",
     params(
         ("id" = Uuid, Path, description = "Group ID")
     ),

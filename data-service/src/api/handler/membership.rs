@@ -18,6 +18,7 @@ use crate::{
     post,
     path = "/api/v1/groups/{group_id}/members",
     tag = "Membership",
+    operation_id = "add_member",
     params(
         ("group_id" = Uuid, Path, description = "Group ID")
     ),
@@ -44,6 +45,7 @@ pub async fn add_member(
     delete,
     path = "/api/v1/groups/{group_id}/members/{staff_id}",
     tag = "Membership",
+    operation_id = "remove_member",
     params(
         ("group_id" = Uuid, Path, description = "Group ID"),
         ("staff_id" = Uuid, Path, description = "Staff ID")
@@ -69,6 +71,7 @@ pub async fn remove_member(
     get,
     path = "/api/v1/groups/{group_id}/members",
     tag = "Membership",
+    operation_id = "get_group_members",
     params(
         ("group_id" = Uuid, Path, description = "Group ID")
     ),
@@ -90,6 +93,7 @@ pub async fn get_group_members(
     get,
     path = "/api/v1/staff/{id}/groups",
     tag = "Membership",
+    operation_id = "get_staff_groups",
     params(
         ("id" = Uuid, Path, description = "Staff ID")
     ),
@@ -111,6 +115,7 @@ pub async fn get_staff_groups(
     get,
     path = "/api/v1/groups/{group_id}/resolved-members",
     tag = "Membership",
+    operation_id = "resolve_members",
     params(
         ("group_id" = Uuid, Path, description = "Group ID")
     ),
@@ -132,6 +137,7 @@ pub async fn resolve_members(
     post,
     path = "/api/v1/memberships/batch",
     tag = "Membership",
+    operation_id = "batch_add_members",
     request_body = Vec<AddMembership>,
     responses(
         (status = 200, description = "Memberships batch added", body = EmptyApiResponse)

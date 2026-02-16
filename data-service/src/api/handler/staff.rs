@@ -20,6 +20,7 @@ use crate::{
     get,
     path = "/api/v1/staff",
     tag = "Staff",
+    operation_id = "list_staff",
     responses(
         (status = 200, description = "List all staff", body = ApiResponse<Vec<Staff>>)
     )
@@ -36,6 +37,7 @@ pub async fn find_all(
     get,
     path = "/api/v1/staff/{id}",
     tag = "Staff",
+    operation_id = "get_staff",
     params(
         ("id" = Uuid, Path, description = "Staff ID")
     ),
@@ -61,6 +63,7 @@ pub async fn find_by_id(
     post,
     path = "/api/v1/staff",
     tag = "Staff",
+    operation_id = "create_staff",
     request_body = CreateStaff,
     responses(
         (status = 200, description = "Staff created", body = ApiResponse<Staff>)
@@ -80,6 +83,7 @@ pub async fn create(
     post,
     path = "/api/v1/staff/batch",
     tag = "Staff",
+    operation_id = "batch_create_staff",
     request_body = Vec<CreateStaff>,
     responses(
         (status = 200, description = "Staff batch created", body = ApiResponse<Vec<Staff>>)
@@ -99,6 +103,7 @@ pub async fn batch_create(
     put,
     path = "/api/v1/staff/{id}",
     tag = "Staff",
+    operation_id = "update_staff",
     params(
         ("id" = Uuid, Path, description = "Staff ID")
     ),
@@ -122,6 +127,7 @@ pub async fn update(
     patch,
     path = "/api/v1/staff/{id}/deactivate",
     tag = "Staff",
+    operation_id = "deactivate_staff",
     params(
         ("id" = Uuid, Path, description = "Staff ID")
     ),
@@ -143,6 +149,7 @@ pub async fn deactivate(
     delete,
     path = "/api/v1/staff/{id}",
     tag = "Staff",
+    operation_id = "delete_staff",
     params(
         ("id" = Uuid, Path, description = "Staff ID")
     ),
