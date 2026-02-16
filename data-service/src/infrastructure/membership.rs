@@ -3,7 +3,10 @@ use shared::types::{Staff, StaffGroup};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::{domain::membership::MembershipRepository, error::DataServiceError};
+use crate::{
+    domain::membership::{AddMembership, MembershipRepository},
+    error::DataServiceError,
+};
 
 pub struct PgMembershipRepository {
     pool: PgPool,
@@ -137,5 +140,28 @@ impl MembershipRepository for PgMembershipRepository {
         .await?;
 
         Ok(output)
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn batch_add_members(
+        &self,
+        memberships: Vec<AddMembership>,
+    ) -> Result<(), DataServiceError> {
+        let staff_ids: Vec<Uuid> = memberships.iter().map(|m| m.staff_id).collect();
+        let group_ids: Vec<Uuid> = memberships.iter().map(|m| m.group_id).collect();
+
+        sqlx::query!(
+            r#"
+            INSERT INTO group_memberships (staff_id, group_id)
+            SELECT * FROM UNNEST($1::uuid[], $2::uuid[])
+            ON CONFLICT DO NOTHING
+            "#,
+            &staff_ids,
+            &group_ids
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 }

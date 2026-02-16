@@ -16,4 +16,6 @@ RUN cargo build --release --bin scheduling-service
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y libssl3 ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /src/target/release/scheduling-service /usr/local/bin/
+COPY scheduling-service/scheduling.toml /etc/scheduling-service/scheduling.toml
+ENV SCHEDULING_CONFIG_PATH=/etc/scheduling-service/scheduling.toml
 CMD [ "scheduling-service" ]

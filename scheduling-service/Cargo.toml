@@ -34,6 +34,8 @@ opentelemetry-http = { version = "0.31.0" }
 tracing-opentelemetry = { version = "0.32.1" }
 utoipa = { version = "5.4.0", features = ["axum_extras", "uuid", "chrono"] }
 utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
+toml = { version = "0.9.8" }
+chrono-tz = { version = "0.10.4" }
 shared = { path = "../shared" }
 
 [dev-dependencies]

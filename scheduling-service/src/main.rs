@@ -50,7 +50,9 @@ async fn main() {
 
     let job_repo = Arc::new(PgJobRepository::new(pool.clone()));
     let data_client = Arc::new(HttpDataServiceClient::new(data_service_url));
-    let config = SchedulingConfig::default();
+    let config_path =
+        env::var("SCHEDULING_CONFIG_PATH").unwrap_or_else(|_| "scheduling.toml".to_string());
+    let config = SchedulingConfig::load(&config_path).expect("Failed to load scheduling config");
 
     let scheduling_service = Arc::new(SchedulingService::new(job_repo, data_client, config));
 

@@ -21,6 +21,7 @@ use data_service::{
         group::MockGroupRepository, membership::MockMembershipRepository,
         staff::MockStaffRepository,
     },
+    error::DataServiceError,
 };
 use shared::types::{Staff, StaffGroup, StaffStatus};
 
@@ -60,6 +61,10 @@ fn build_test_app(
         .route(
             "/api/v1/groups/{group_id}/members/{staff_id}",
             delete(membership::remove_member),
+        )
+        .route(
+            "/api/v1/memberships/batch",
+            post(membership::batch_add_members),
         )
         .route(
             "/api/v1/groups/{group_id}/resolved-members",
@@ -266,4 +271,517 @@ async fn resolve_members_returns_nested() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(json["success"].as_bool().unwrap());
     assert_eq!(json["data"].as_array().unwrap().len(), 1);
+}
+
+// -- Staff update / delete / deactivate tests --
+
+#[tokio::test]
+async fn update_staff_returns_updated() {
+    let mut mock_staff = MockStaffRepository::new();
+    let staff_id = Uuid::new_v4();
+    let mut updated = make_staff(staff_id);
+    updated.name = "Alice Updated".to_string();
+
+    mock_staff
+        .expect_update()
+        .returning(move |_, _| Ok(updated.clone()));
+
+    let app = build_test_app(
+        mock_staff,
+        MockGroupRepository::new(),
+        MockMembershipRepository::new(),
+    );
+
+    let body = json!({ "name": "Alice Updated" });
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(format!("/api/v1/staff/{staff_id}"))
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["success"].as_bool().unwrap());
+    assert_eq!(json["data"]["name"], "Alice Updated");
+}
+
+#[tokio::test]
+async fn update_staff_not_found_returns_404() {
+    let mut mock_staff = MockStaffRepository::new();
+    mock_staff
+        .expect_update()
+        .returning(|_, _| Err(DataServiceError::NotFound("Staff not found".into())));
+
+    let app = build_test_app(
+        mock_staff,
+        MockGroupRepository::new(),
+        MockMembershipRepository::new(),
+    );
+
+    let body = json!({ "name": "Ghost" });
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(format!("/api/v1/staff/{}", Uuid::new_v4()))
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn delete_staff_returns_ok() {
+    let mut mock_staff = MockStaffRepository::new();
+    mock_staff.expect_delete().returning(|_| Ok(()));
+
+    let app = build_test_app(
+        mock_staff,
+        MockGroupRepository::new(),
+        MockMembershipRepository::new(),
+    );
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/api/v1/staff/{}", Uuid::new_v4()))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn delete_staff_not_found_returns_404() {
+    let mut mock_staff = MockStaffRepository::new();
+    mock_staff
+        .expect_delete()
+        .returning(|_| Err(DataServiceError::NotFound("Staff not found".into())));
+
+    let app = build_test_app(
+        mock_staff,
+        MockGroupRepository::new(),
+        MockMembershipRepository::new(),
+    );
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/api/v1/staff/{}", Uuid::new_v4()))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn deactivate_staff_returns_ok() {
+    let mut mock_staff = MockStaffRepository::new();
+    mock_staff.expect_deactivate().returning(|_| Ok(()));
+
+    let app = build_test_app(
+        mock_staff,
+        MockGroupRepository::new(),
+        MockMembershipRepository::new(),
+    );
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/api/v1/staff/{}/deactivate", Uuid::new_v4()))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn create_staff_duplicate_email_returns_409() {
+    let mut mock_staff = MockStaffRepository::new();
+    mock_staff
+        .expect_create()
+        .returning(|_| Err(DataServiceError::Conflict("Email already exists".into())));
+
+    let app = build_test_app(
+        mock_staff,
+        MockGroupRepository::new(),
+        MockMembershipRepository::new(),
+    );
+
+    let body = json!({
+        "name": "Duplicate",
+        "email": "dup@example.com",
+        "position": "Staff"
+    });
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/staff")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn batch_create_staff_returns_list() {
+    let mut mock_staff = MockStaffRepository::new();
+    let staff = vec![make_staff(Uuid::new_v4()), make_staff(Uuid::new_v4())];
+
+    mock_staff
+        .expect_batch_create()
+        .returning(move |_| Ok(staff.clone()));
+
+    let app = build_test_app(
+        mock_staff,
+        MockGroupRepository::new(),
+        MockMembershipRepository::new(),
+    );
+
+    let body = json!([
+        { "name": "A", "email": "a@example.com", "position": "Staff" },
+        { "name": "B", "email": "b@example.com", "position": "Staff" }
+    ]);
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/staff/batch")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["success"].as_bool().unwrap());
+    assert_eq!(json["data"].as_array().unwrap().len(), 2);
+}
+
+// -- Group update / delete / batch tests --
+
+#[tokio::test]
+async fn update_group_returns_updated() {
+    let mut mock_group = MockGroupRepository::new();
+    let group_id = Uuid::new_v4();
+    let mut updated = make_group(group_id);
+    updated.name = "Ward B".to_string();
+
+    mock_group
+        .expect_update()
+        .returning(move |_, _| Ok(updated.clone()));
+
+    let app = build_test_app(
+        MockStaffRepository::new(),
+        mock_group,
+        MockMembershipRepository::new(),
+    );
+
+    let body = json!({ "name": "Ward B" });
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(format!("/api/v1/groups/{group_id}"))
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["success"].as_bool().unwrap());
+    assert_eq!(json["data"]["name"], "Ward B");
+}
+
+#[tokio::test]
+async fn delete_group_returns_ok() {
+    let mut mock_group = MockGroupRepository::new();
+    mock_group.expect_delete().returning(|_| Ok(()));
+
+    let app = build_test_app(
+        MockStaffRepository::new(),
+        mock_group,
+        MockMembershipRepository::new(),
+    );
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/api/v1/groups/{}", Uuid::new_v4()))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn find_group_not_found_returns_404() {
+    let mut mock_group = MockGroupRepository::new();
+    mock_group.expect_find_by_id().returning(|_| Ok(None));
+
+    let app = build_test_app(
+        MockStaffRepository::new(),
+        mock_group,
+        MockMembershipRepository::new(),
+    );
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/v1/groups/{}", Uuid::new_v4()))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn batch_create_groups_returns_list() {
+    let mut mock_group = MockGroupRepository::new();
+    let groups = vec![make_group(Uuid::new_v4()), make_group(Uuid::new_v4())];
+
+    mock_group
+        .expect_batch_create()
+        .returning(move |_| Ok(groups.clone()));
+
+    let app = build_test_app(
+        MockStaffRepository::new(),
+        mock_group,
+        MockMembershipRepository::new(),
+    );
+
+    let body = json!([
+        { "name": "Ward A" },
+        { "name": "Ward B" }
+    ]);
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/groups/batch")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["success"].as_bool().unwrap());
+    assert_eq!(json["data"].as_array().unwrap().len(), 2);
+}
+
+// -- Membership tests --
+
+#[tokio::test]
+async fn add_member_returns_ok() {
+    let mut mock_membership = MockMembershipRepository::new();
+    mock_membership
+        .expect_add_staff_to_group()
+        .returning(|_, _| Ok(()));
+
+    let app = build_test_app(
+        MockStaffRepository::new(),
+        MockGroupRepository::new(),
+        mock_membership,
+    );
+
+    let group_id = Uuid::new_v4();
+    let body = json!({ "staff_id": Uuid::new_v4(), "group_id": group_id });
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/v1/groups/{group_id}/members"))
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn remove_member_returns_ok() {
+    let mut mock_membership = MockMembershipRepository::new();
+    mock_membership
+        .expect_remove_staff_from_group()
+        .returning(|_, _| Ok(()));
+
+    let app = build_test_app(
+        MockStaffRepository::new(),
+        MockGroupRepository::new(),
+        mock_membership,
+    );
+
+    let group_id = Uuid::new_v4();
+    let staff_id = Uuid::new_v4();
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/api/v1/groups/{group_id}/members/{staff_id}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn get_group_members_returns_list() {
+    let mut mock_membership = MockMembershipRepository::new();
+    let staff = vec![make_staff(Uuid::new_v4()), make_staff(Uuid::new_v4())];
+
+    mock_membership
+        .expect_get_group_members()
+        .returning(move |_| Ok(staff.clone()));
+
+    let app = build_test_app(
+        MockStaffRepository::new(),
+        MockGroupRepository::new(),
+        mock_membership,
+    );
+
+    let group_id = Uuid::new_v4();
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/v1/groups/{group_id}/members"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["success"].as_bool().unwrap());
+    assert_eq!(json["data"].as_array().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn get_staff_groups_returns_list() {
+    let mut mock_membership = MockMembershipRepository::new();
+    let groups = vec![make_group(Uuid::new_v4())];
+
+    mock_membership
+        .expect_get_staff_groups()
+        .returning(move |_| Ok(groups.clone()));
+
+    let app = build_test_app(
+        MockStaffRepository::new(),
+        MockGroupRepository::new(),
+        mock_membership,
+    );
+
+    let staff_id = Uuid::new_v4();
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/v1/staff/{staff_id}/groups"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["success"].as_bool().unwrap());
+    assert_eq!(json["data"].as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn batch_add_members_returns_ok() {
+    let mut mock_membership = MockMembershipRepository::new();
+    mock_membership
+        .expect_batch_add_members()
+        .returning(|_| Ok(()));
+
+    let app = build_test_app(
+        MockStaffRepository::new(),
+        MockGroupRepository::new(),
+        mock_membership,
+    );
+
+    let body = json!([
+        { "staff_id": Uuid::new_v4(), "group_id": Uuid::new_v4() },
+        { "staff_id": Uuid::new_v4(), "group_id": Uuid::new_v4() }
+    ]);
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/memberships/batch")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
 }

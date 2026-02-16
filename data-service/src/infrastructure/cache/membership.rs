@@ -5,7 +5,7 @@ use shared::types::{Staff, StaffGroup};
 use uuid::Uuid;
 
 use super::client::RedisCache;
-use crate::domain::membership::MembershipRepository;
+use crate::domain::membership::{AddMembership, MembershipRepository};
 use crate::error::DataServiceError;
 
 const TTL: u64 = 300;
@@ -97,6 +97,18 @@ impl MembershipRepository for CachedMembershipRepository {
             .remove_staff_from_group(group_id, staff_id)
             .await?;
         self.invalidate_membership(group_id, staff_id).await;
+
+        Ok(())
+    }
+
+    async fn batch_add_members(
+        &self,
+        memberships: Vec<AddMembership>,
+    ) -> Result<(), DataServiceError> {
+        self.inner.batch_add_members(memberships).await?;
+        self.cache
+            .delete_by_pattern("data-service:membership:*")
+            .await;
 
         Ok(())
     }

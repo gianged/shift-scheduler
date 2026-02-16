@@ -71,15 +71,15 @@ pub async fn get_status(
         ("schedule_id" = Uuid, Path, description = "Schedule job ID")
     ),
     responses(
-        (status = 200, description = "Schedule result with shift assignments", body = ApiResponse<Vec<shared::types::ShiftAssignment>>)
+        (status = 200, description = "Schedule result with shift assignments", body = ApiResponse<shared::types::ScheduleResult>)
     )
 )]
 #[tracing::instrument(skip(state))]
 pub async fn get_result(
     State(state): State<Arc<SchedulingAppState>>,
     Path(schedule_id): Path<Uuid>,
-) -> Result<Json<ApiResponse<Vec<shared::types::ShiftAssignment>>>, SchedulingServiceError> {
-    let assignments = state.scheduling_service.get_result(schedule_id).await?;
+) -> Result<Json<ApiResponse<shared::types::ScheduleResult>>, SchedulingServiceError> {
+    let output = state.scheduling_service.get_result(schedule_id).await?;
 
-    Ok(Json(ApiResponse::ok(assignments)))
+    Ok(Json(ApiResponse::ok(output)))
 }

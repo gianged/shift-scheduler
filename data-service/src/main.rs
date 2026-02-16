@@ -46,6 +46,7 @@ use utoipa_swagger_ui::SwaggerUi;
         membership::get_group_members,
         membership::get_staff_groups,
         membership::resolve_members,
+        membership::batch_add_members,
     ),
     tags(
         (name = "Staff", description = "Staff management"),
@@ -122,6 +123,10 @@ async fn main() {
                 .delete(group::delete),
         )
         // Membership routes
+        .route(
+            "/api/v1/memberships/batch",
+            post(membership::batch_add_members),
+        )
         .route(
             "/api/v1/groups/{group_id}/members",
             get(membership::get_group_members).post(membership::add_member),

@@ -82,4 +82,12 @@ pub struct ShiftAssignment {
     pub shift_type: ShiftType,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ScheduleResult {
+    pub schedule_id: Uuid,
+    pub period_begin_date: NaiveDate,
+    pub staff_group_id: Uuid,
+    pub assignments: Vec<ShiftAssignment>,
+}
+
 // endregion: Scheduling Service Types

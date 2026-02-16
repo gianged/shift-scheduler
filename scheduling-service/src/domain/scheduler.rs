@@ -1,4 +1,8 @@
+use std::path::Path;
+
 use chrono::{Duration, NaiveDate};
+use chrono_tz::Tz;
+use serde::Deserialize;
 use shared::types::ShiftType;
 use thiserror::Error;
 use uuid::Uuid;
@@ -8,8 +12,10 @@ use crate::domain::job::NewShiftAssignment;
 const PERIOD_DAYS: usize = 28;
 const DAYS_PER_WEEK: usize = 7;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
 pub struct SchedulingConfig {
+    pub timezone: String,
     pub min_day_off_per_week: u8,
     pub max_day_off_per_week: u8,
     pub no_morning_after_evening: bool,
@@ -19,11 +25,35 @@ pub struct SchedulingConfig {
 impl Default for SchedulingConfig {
     fn default() -> Self {
         Self {
+            timezone: "UTC".to_string(),
             min_day_off_per_week: 1,
             max_day_off_per_week: 2,
             no_morning_after_evening: true,
             max_daily_shift_diff: 1,
         }
+    }
+}
+
+impl SchedulingConfig {
+    pub fn load(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        if !Path::new(path).exists() {
+            tracing::info!("Config file not found at {path}, using defaults");
+            return Ok(Self::default());
+        }
+        let content = std::fs::read_to_string(path)?;
+        let config: Self = toml::from_str(&content)?;
+        tracing::info!(?config, "Loaded scheduling config from {path}");
+        Ok(config)
+    }
+
+    pub fn timezone(&self) -> Tz {
+        self.timezone.parse::<Tz>().unwrap_or_else(|_| {
+            tracing::warn!(
+                timezone = %self.timezone,
+                "Invalid timezone, falling back to UTC"
+            );
+            Tz::UTC
+        })
     }
 }
 
@@ -33,70 +63,117 @@ pub enum SchedulingError {
     NoValidShift { staff_id: Uuid, day: usize },
 }
 
-// region: Contraisn functions
+// region: Trait-based scheduling rules
 
-fn is_morning_after_evening_ok(
-    previous: Option<&ShiftType>,
-    current: &ShiftType,
-    config: &SchedulingConfig,
-) -> bool {
-    if !config.no_morning_after_evening {
-        return true;
-    }
-    !matches!(
-        (previous, current),
-        (Some(ShiftType::Evening), ShiftType::Morning)
-    )
+pub struct AssignmentContext {
+    pub previous_shift: Option<ShiftType>,
+    pub day_offs_this_week: u8,
+    pub days_remaining_in_week: u8,
+    pub morning_count: usize,
+    pub evening_count: usize,
 }
 
-fn is_day_off_within_max(
-    day_offs_this_week: u8,
-    current: &ShiftType,
-    config: &SchedulingConfig,
-) -> bool {
-    if *current != ShiftType::DayOff {
-        return true;
-    }
-    day_offs_this_week < config.max_day_off_per_week
+pub trait SchedulingRule: Send + Sync {
+    fn name(&self) -> &str;
+    fn is_valid(&self, ctx: &AssignmentContext, candidate: &ShiftType) -> bool;
 }
 
-fn can_still_meet_min_day_off(
-    day_offs_this_week: u8,
-    days_remaining_in_week: u8,
-    current: &ShiftType,
-    config: &SchedulingConfig,
-) -> bool {
-    if *current == ShiftType::DayOff {
-        return true;
+pub struct NoMorningAfterEveningRule;
+
+impl SchedulingRule for NoMorningAfterEveningRule {
+    fn name(&self) -> &str {
+        "no_morning_after_evening"
     }
 
-    // check mininum after
-    day_offs_this_week + days_remaining_in_week >= config.min_day_off_per_week
+    fn is_valid(&self, ctx: &AssignmentContext, candidate: &ShiftType) -> bool {
+        !matches!(
+            (ctx.previous_shift.as_ref(), candidate),
+            (Some(ShiftType::Evening), ShiftType::Morning)
+        )
+    }
 }
 
-fn is_daily_balance_ok(
-    morning_count: usize,
-    evening_count: usize,
-    current: &ShiftType,
-    config: &SchedulingConfig,
-) -> bool {
-    let (m, e) = match current {
-        ShiftType::Morning => (morning_count + 1, evening_count),
-        ShiftType::Evening => (morning_count, evening_count + 1),
-        ShiftType::DayOff => return true,
-    };
-    m.abs_diff(e) <= config.max_daily_shift_diff as usize
+pub struct MaxDayOffRule {
+    pub max: u8,
 }
 
-// endregion: Contraisn functions
+impl SchedulingRule for MaxDayOffRule {
+    fn name(&self) -> &str {
+        "max_day_off"
+    }
+
+    fn is_valid(&self, ctx: &AssignmentContext, candidate: &ShiftType) -> bool {
+        if *candidate != ShiftType::DayOff {
+            return true;
+        }
+        ctx.day_offs_this_week < self.max
+    }
+}
+
+pub struct MinDayOffRule {
+    pub min: u8,
+}
+
+impl SchedulingRule for MinDayOffRule {
+    fn name(&self) -> &str {
+        "min_day_off"
+    }
+
+    fn is_valid(&self, ctx: &AssignmentContext, candidate: &ShiftType) -> bool {
+        if *candidate == ShiftType::DayOff {
+            return true;
+        }
+        ctx.day_offs_this_week + ctx.days_remaining_in_week >= self.min
+    }
+}
+
+pub struct DailyBalanceRule {
+    pub max_diff: u8,
+}
+
+impl SchedulingRule for DailyBalanceRule {
+    fn name(&self) -> &str {
+        "daily_balance"
+    }
+
+    fn is_valid(&self, ctx: &AssignmentContext, candidate: &ShiftType) -> bool {
+        let (m, e) = match candidate {
+            ShiftType::Morning => (ctx.morning_count + 1, ctx.evening_count),
+            ShiftType::Evening => (ctx.morning_count, ctx.evening_count + 1),
+            ShiftType::DayOff => return true,
+        };
+        m.abs_diff(e) <= self.max_diff as usize
+    }
+}
+
+impl SchedulingConfig {
+    pub fn build_rules(&self) -> Vec<Box<dyn SchedulingRule>> {
+        let mut rules: Vec<Box<dyn SchedulingRule>> = Vec::new();
+        if self.no_morning_after_evening {
+            rules.push(Box::new(NoMorningAfterEveningRule));
+        }
+        rules.push(Box::new(MaxDayOffRule {
+            max: self.max_day_off_per_week,
+        }));
+        rules.push(Box::new(MinDayOffRule {
+            min: self.min_day_off_per_week,
+        }));
+        rules.push(Box::new(DailyBalanceRule {
+            max_diff: self.max_daily_shift_diff,
+        }));
+        rules
+    }
+}
+
+// endregion: Trait-based scheduling rules
 
 // region: Main algo
 
-#[tracing::instrument(skip(staff_ids, config))]
+#[tracing::instrument(skip(staff_ids, rules))]
 pub fn gen_schedule(
     staff_ids: &[Uuid],
     period_begin_date: NaiveDate,
-    config: &SchedulingConfig,
+    rules: &[Box<dyn SchedulingRule>],
 ) -> Result<Vec<NewShiftAssignment>, SchedulingError> {
     tracing::debug!(
         staff_count = staff_ids.len(),
@@ -106,9 +183,9 @@ pub fn gen_schedule(
     let shift_options = [ShiftType::Morning, ShiftType::Evening, ShiftType::DayOff];
     let mut assignments: Vec<NewShiftAssignment> = Vec::new();
 
-    // per staff track: pervious day shift
+    // per staff track: previous day shift
     let mut previous_shifts: Vec<Option<ShiftType>> = vec![None; staff_ids.len()];
-    //per staff track: day off count in current week
+    // per staff track: day off count in current week
     let mut weekly_day_offs: Vec<u8> = vec![0; staff_ids.len()];
 
     for day in 0..PERIOD_DAYS {
@@ -129,15 +206,15 @@ pub fn gen_schedule(
             let mut assigned = false;
 
             for shift in &shift_options {
-                let ok = is_morning_after_evening_ok(previous_shifts[i].as_ref(), shift, config)
-                    && is_day_off_within_max(weekly_day_offs[i], shift, config)
-                    && can_still_meet_min_day_off(
-                        weekly_day_offs[i],
-                        days_remaining_in_week,
-                        shift,
-                        config,
-                    )
-                    && is_daily_balance_ok(morning_count, evening_count, shift, config);
+                let ctx = AssignmentContext {
+                    previous_shift: previous_shifts[i].clone(),
+                    day_offs_this_week: weekly_day_offs[i],
+                    days_remaining_in_week,
+                    morning_count,
+                    evening_count,
+                };
+
+                let ok = rules.iter().all(|rule| rule.is_valid(&ctx, shift));
 
                 if ok {
                     if *shift == ShiftType::DayOff {
@@ -192,69 +269,119 @@ mod tests {
         NaiveDate::from_ymd_opt(2026, 2, 16).unwrap()
     }
 
-    // Constraint function tests
+    // Rule tests
 
     #[test]
-    fn morning_after_evening_blocked() {
-        let config = default_config();
-        assert!(!is_morning_after_evening_ok(
-            Some(&ShiftType::Evening),
-            &ShiftType::Morning,
-            &config,
-        ));
+    fn no_morning_after_evening_rule_blocks() {
+        let rule = NoMorningAfterEveningRule;
+        let ctx = AssignmentContext {
+            previous_shift: Some(ShiftType::Evening),
+            day_offs_this_week: 0,
+            days_remaining_in_week: 6,
+            morning_count: 0,
+            evening_count: 0,
+        };
+        assert!(!rule.is_valid(&ctx, &ShiftType::Morning));
     }
 
     #[test]
-    fn morning_after_evening_allowed_when_disabled() {
+    fn no_morning_after_evening_rule_allows_evening_after_evening() {
+        let rule = NoMorningAfterEveningRule;
+        let ctx = AssignmentContext {
+            previous_shift: Some(ShiftType::Evening),
+            day_offs_this_week: 0,
+            days_remaining_in_week: 6,
+            morning_count: 0,
+            evening_count: 0,
+        };
+        assert!(rule.is_valid(&ctx, &ShiftType::Evening));
+    }
+
+    #[test]
+    fn max_day_off_rule_blocks_excess() {
+        let rule = MaxDayOffRule { max: 2 };
+        let ctx = AssignmentContext {
+            previous_shift: None,
+            day_offs_this_week: 2,
+            days_remaining_in_week: 4,
+            morning_count: 0,
+            evening_count: 0,
+        };
+        assert!(!rule.is_valid(&ctx, &ShiftType::DayOff));
+    }
+
+    #[test]
+    fn max_day_off_rule_allows_under_max() {
+        let rule = MaxDayOffRule { max: 2 };
+        let ctx = AssignmentContext {
+            previous_shift: None,
+            day_offs_this_week: 1,
+            days_remaining_in_week: 4,
+            morning_count: 0,
+            evening_count: 0,
+        };
+        assert!(rule.is_valid(&ctx, &ShiftType::DayOff));
+    }
+
+    #[test]
+    fn min_day_off_rule_forces_day_off() {
+        let rule = MinDayOffRule { min: 1 };
+        // 0 day offs, 0 days remaining -> working shift must be rejected
+        let ctx = AssignmentContext {
+            previous_shift: None,
+            day_offs_this_week: 0,
+            days_remaining_in_week: 0,
+            morning_count: 0,
+            evening_count: 0,
+        };
+        assert!(!rule.is_valid(&ctx, &ShiftType::Morning));
+    }
+
+    #[test]
+    fn daily_balance_rule_rejects_imbalance() {
+        let rule = DailyBalanceRule { max_diff: 1 };
+        // 3 morning, 1 evening -> adding morning would make diff 3
+        let ctx = AssignmentContext {
+            previous_shift: None,
+            day_offs_this_week: 0,
+            days_remaining_in_week: 6,
+            morning_count: 3,
+            evening_count: 1,
+        };
+        assert!(!rule.is_valid(&ctx, &ShiftType::Morning));
+    }
+
+    #[test]
+    fn daily_balance_rule_day_off_always_passes() {
+        let rule = DailyBalanceRule { max_diff: 1 };
+        let ctx = AssignmentContext {
+            previous_shift: None,
+            day_offs_this_week: 0,
+            days_remaining_in_week: 6,
+            morning_count: 10,
+            evening_count: 0,
+        };
+        assert!(rule.is_valid(&ctx, &ShiftType::DayOff));
+    }
+
+    #[test]
+    fn build_rules_includes_morning_after_evening_when_enabled() {
+        let config = default_config();
+        let rules = config.build_rules();
+        assert!(rules.iter().any(|r| r.name() == "no_morning_after_evening"));
+    }
+
+    #[test]
+    fn build_rules_excludes_morning_after_evening_when_disabled() {
         let config = SchedulingConfig {
             no_morning_after_evening: false,
             ..default_config()
         };
-        assert!(is_morning_after_evening_ok(
-            Some(&ShiftType::Evening),
-            &ShiftType::Morning,
-            &config,
-        ));
+        let rules = config.build_rules();
+        assert!(!rules.iter().any(|r| r.name() == "no_morning_after_evening"));
     }
 
-    #[test]
-    fn day_off_within_max() {
-        let config = default_config(); // max 2
-        assert!(!is_day_off_within_max(2, &ShiftType::DayOff, &config));
-    }
-
-    #[test]
-    fn day_off_within_max_ok() {
-        let config = default_config(); // max 2
-        assert!(is_day_off_within_max(1, &ShiftType::DayOff, &config));
-    }
-
-    #[test]
-    fn can_still_meet_min_day_off_forces_day_off() {
-        let config = default_config(); // min 1
-        // 0 day offs, 0 days remaining -> working shift must be rejected
-        assert!(!can_still_meet_min_day_off(
-            0,
-            0,
-            &ShiftType::Morning,
-            &config,
-        ));
-    }
-
-    #[test]
-    fn daily_balance_ok_rejects_imbalance() {
-        let config = default_config(); // max_diff 1
-        // 3 morning, 1 evening -> adding morning would make diff 3
-        assert!(!is_daily_balance_ok(3, 1, &ShiftType::Morning, &config));
-    }
-
-    #[test]
-    fn daily_balance_ok_day_off_always_passes() {
-        let config = default_config();
-        assert!(is_daily_balance_ok(10, 0, &ShiftType::DayOff, &config));
-    }
-
-    // gen_schedule test
+    // gen_schedule tests
 
     fn validate_schedule(
         assignments: &[NewShiftAssignment],
@@ -325,7 +452,8 @@ mod tests {
     fn gen_schedule_single_staff() {
         let staff_ids = vec![Uuid::new_v4()];
         let config = default_config();
-        let assignments = gen_schedule(&staff_ids, monday(), &config).unwrap();
+        let rules = config.build_rules();
+        let assignments = gen_schedule(&staff_ids, monday(), &rules).unwrap();
         validate_schedule(&assignments, &staff_ids, &config);
     }
 
@@ -333,7 +461,8 @@ mod tests {
     fn gen_schedule_multiple_staff() {
         let staff_ids: Vec<_> = (0..4).map(|_| Uuid::new_v4()).collect();
         let config = default_config();
-        let assignments = gen_schedule(&staff_ids, monday(), &config).unwrap();
+        let rules = config.build_rules();
+        let assignments = gen_schedule(&staff_ids, monday(), &rules).unwrap();
         assert_eq!(assignments.len(), 4 * PERIOD_DAYS);
         validate_schedule(&assignments, &staff_ids, &config);
     }
@@ -341,7 +470,8 @@ mod tests {
     #[test]
     fn gen_schedule_empty_staff() {
         let config = default_config();
-        let output = gen_schedule(&[], monday(), &config).unwrap();
+        let rules = config.build_rules();
+        let output = gen_schedule(&[], monday(), &rules).unwrap();
         assert!(output.is_empty());
     }
 
@@ -353,7 +483,18 @@ mod tests {
             max_daily_shift_diff: 4,
             ..default_config()
         };
-        let assignments = gen_schedule(&staff_ids, monday(), &config).unwrap();
+        let rules = config.build_rules();
+        let assignments = gen_schedule(&staff_ids, monday(), &rules).unwrap();
+        validate_schedule(&assignments, &staff_ids, &config);
+    }
+
+    #[test]
+    fn gen_schedule_large_staff_group() {
+        let staff_ids: Vec<_> = (0..20).map(|_| Uuid::new_v4()).collect();
+        let config = default_config();
+        let rules = config.build_rules();
+        let assignments = gen_schedule(&staff_ids, monday(), &rules).unwrap();
+        assert_eq!(assignments.len(), 20 * PERIOD_DAYS);
         validate_schedule(&assignments, &staff_ids, &config);
     }
 }

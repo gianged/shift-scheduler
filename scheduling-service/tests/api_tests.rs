@@ -143,10 +143,12 @@ async fn get_status_not_found_returns_404() {
 }
 
 #[tokio::test]
-async fn get_result_returns_assignments() {
+async fn get_result_returns_schedule_result() {
     let mut repo = MockJobRepository::new();
     let job_id = Uuid::new_v4();
     let job = make_job(job_id, JobStatus::Completed);
+    let staff_group_id = job.staff_group_id;
+    let period_begin_date = job.period_begin_date;
 
     repo.expect_find_by_id()
         .returning(move |_| Ok(Some(job.clone())));
@@ -179,5 +181,81 @@ async fn get_result_returns_assignments() {
     let body = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(json["success"].as_bool().unwrap());
-    assert_eq!(json["data"].as_array().unwrap().len(), 1);
+
+    let data = &json["data"];
+    assert_eq!(data["schedule_id"], job_id.to_string());
+    assert_eq!(data["staff_group_id"], staff_group_id.to_string());
+    assert_eq!(data["period_begin_date"], period_begin_date.to_string());
+    assert_eq!(data["assignments"].as_array().unwrap().len(), 1);
+    assert_eq!(data["assignments"][0]["shift_type"], "MORNING");
+}
+
+#[tokio::test]
+async fn submit_schedule_non_monday_returns_400() {
+    let repo = MockJobRepository::new();
+    let client = MockDataServiceClient::new();
+    let app = build_test_app(repo, client);
+
+    let body = json!({
+        "staff_group_id": Uuid::new_v4(),
+        "period_begin_date": "2026-02-17"
+    });
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/schedules")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn get_result_not_completed_returns_400() {
+    let mut repo = MockJobRepository::new();
+    let job_id = Uuid::new_v4();
+    let job = make_job(job_id, JobStatus::Processing);
+
+    repo.expect_find_by_id()
+        .returning(move |_| Ok(Some(job.clone())));
+
+    let app = build_test_app(repo, MockDataServiceClient::new());
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/v1/schedules/{job_id}/result"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn get_result_not_found_returns_404() {
+    let mut repo = MockJobRepository::new();
+    repo.expect_find_by_id().returning(|_| Ok(None));
+
+    let app = build_test_app(repo, MockDataServiceClient::new());
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/v1/schedules/{}/result", Uuid::new_v4()))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
 }

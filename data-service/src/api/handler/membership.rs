@@ -4,20 +4,15 @@ use axum::{
     Json,
     extract::{Path, State},
 };
-use serde::Deserialize;
 use shared::{
     responses::{ApiResponse, EmptyApiResponse},
     types::{Staff, StaffGroup},
 };
-use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{api::state::DataServiceAppState, error::DataServiceError};
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct AddMemberRequest {
-    pub staff_id: Uuid,
-}
+use crate::{
+    api::state::DataServiceAppState, domain::membership::AddMembership, error::DataServiceError,
+};
 
 #[utoipa::path(
     post,
@@ -26,7 +21,7 @@ pub struct AddMemberRequest {
     params(
         ("group_id" = Uuid, Path, description = "Group ID")
     ),
-    request_body = AddMemberRequest,
+    request_body = AddMembership,
     responses(
         (status = 200, description = "Member added", body = EmptyApiResponse)
     )
@@ -35,11 +30,11 @@ pub struct AddMemberRequest {
 pub async fn add_member(
     State(state): State<Arc<DataServiceAppState>>,
     Path(group_id): Path<Uuid>,
-    Json(staff): Json<AddMemberRequest>,
+    Json(body): Json<AddMembership>,
 ) -> Result<Json<ApiResponse<()>>, DataServiceError> {
     state
         .membership_repo
-        .add_staff_to_group(group_id, staff.staff_id)
+        .add_staff_to_group(group_id, body.staff_id)
         .await?;
 
     Ok(Json(ApiResponse::ok(())))
@@ -131,4 +126,23 @@ pub async fn resolve_members(
     let output = state.membership_repo.resolve_members(group_id).await?;
 
     Ok(Json(ApiResponse::ok(output)))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/memberships/batch",
+    tag = "Membership",
+    request_body = Vec<AddMembership>,
+    responses(
+        (status = 200, description = "Memberships batch added", body = EmptyApiResponse)
+    )
+)]
+#[tracing::instrument(skip(state))]
+pub async fn batch_add_members(
+    State(state): State<Arc<DataServiceAppState>>,
+    Json(memberships): Json<Vec<AddMembership>>,
+) -> Result<Json<ApiResponse<()>>, DataServiceError> {
+    state.membership_repo.batch_add_members(memberships).await?;
+
+    Ok(Json(ApiResponse::ok(())))
 }

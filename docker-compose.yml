@@ -72,6 +72,19 @@ services:
       data-service:
         condition: service_started
 
+  seed:
+    image: alpine/curl:latest
+    volumes:
+      - ./docker/seed.sh:/seed.sh:ro
+      - ./sample-data:/data:ro
+    environment:
+      DATA_SERVICE_URL: http://data-service:8080
+    depends_on:
+      data-service:
+        condition: service_started
+    entrypoint: ["sh", "/seed.sh"]
+    restart: "no"
+
 volumes:
   pgdata:
   redisdata:

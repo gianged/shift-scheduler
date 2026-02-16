@@ -9,7 +9,7 @@ shift-scheduler/
 - data-service/          # Staff, groups, memberships (PostgreSQL + Redis)
 - scheduling-service/    # Async schedule generation (PostgreSQL)
 - shared/                # Common types, responses, telemetry, shutdown
-- sample_data/           # JSON files for batch import
+- sample-data/           # JSON files for batch import
 - docker-compose.yml     # Full stack: postgres, redis, jaeger, both services
 ```
 
@@ -55,6 +55,24 @@ This starts all services:
 | Scheduling Swagger   | http://localhost:8181/swagger-ui |
 | Jaeger UI            | http://localhost:16686           |
 
+## Sample Data Import
+
+### Automatic (via Docker Compose)
+
+When you run `docker-compose up`, a one-shot `seed` container automatically imports
+staff and groups from the `sample-data/` directory into the data-service.
+
+- **Staff** and **groups** are imported on first run
+- Re-running is safe -the seed script detects existing data and skips
+- **Memberships** require real UUIDs, so they must be created manually via the API
+
+### Manual
+
+1. `POST /api/v1/staff/batch` with `staff.json`
+2. `POST /api/v1/groups/batch` with `groups.json`
+3. `PUT /api/v1/groups/{id}` to set `parent_group_id` using returned IDs
+4. `POST /api/v1/memberships/batch` with real staff/group UUIDs
+
 ## API Overview
 
 ### Data Service (port 8180)
@@ -87,6 +105,7 @@ This starts all services:
 | Method | Path                                         | Description                              |
 | ------ | -------------------------------------------- | ---------------------------------------- |
 | POST   | /api/v1/groups/{group_id}/members            | Add staff to group                       |
+| POST   | /api/v1/memberships/batch                    | Batch add members                        |
 | DELETE | /api/v1/groups/{group_id}/members/{staff_id} | Remove staff from group                  |
 | GET    | /api/v1/groups/{group_id}/members            | List direct members                      |
 | GET    | /api/v1/groups/{group_id}/resolved-members   | List members incl. subgroups (recursive) |
@@ -161,3 +180,11 @@ cargo clippy --workspace --all-targets -- -D warnings
   (`&str` / `Deserialize<'de>`) could reduce heap allocations by borrowing directly
   from the response buffer. This was not implemented as the current data volume
   (tens of staff per request) does not warrant the added lifetime complexity.
+
+  ## Future Work/On-Planning
+
+- **Circuit breaker** for Data Service calls -- would prevent cascade failures when data-service is unavailable by failing fast and auto-recovering after a configurable timeout. The decorator pattern (same approach as `CachedRepository`) makes this straightforward to add.
+
+## Bugs
+
+- Note that in Swagger UI, the staff > find_all route would curl /api/v1/group instead (probably due to Swagger UI bugged when there is 2 schema having almost same names), if you curl /api/v1/staff manually it will do just fine.

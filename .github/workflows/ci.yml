@@ -41,7 +41,7 @@ jobs:
             cargo-${{ steps.toolchain.outputs.cachekey }}-
 
       - name: Check formatting
-        run: cargo fmt --all
+        run: cargo fmt --all -- --check
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
