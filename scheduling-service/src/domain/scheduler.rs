@@ -183,9 +183,8 @@ pub fn gen_schedule(
     let shift_options = [ShiftType::Morning, ShiftType::Evening, ShiftType::DayOff];
     let mut assignments: Vec<NewShiftAssignment> = Vec::new();
 
-    // per staff track: previous day shift
+    // per staff track both fields
     let mut previous_shifts: Vec<Option<ShiftType>> = vec![None; staff_ids.len()];
-    // per staff track: day off count in current week
     let mut weekly_day_offs: Vec<u8> = vec![0; staff_ids.len()];
 
     for day in 0..PERIOD_DAYS {

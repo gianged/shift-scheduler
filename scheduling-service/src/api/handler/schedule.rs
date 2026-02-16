@@ -24,6 +24,7 @@ pub struct CreateScheduleRequest {
     post,
     path = "/api/v1/schedules",
     tag = "Schedules",
+    operation_id = "submit_schedule",
     request_body = CreateScheduleRequest,
     responses(
         (status = 202, description = "Schedule job submitted", body = ApiResponse<shared::types::ScheduleJob>)
@@ -46,6 +47,7 @@ pub async fn submit_schedule(
     get,
     path = "/api/v1/schedules/{schedule_id}/status",
     tag = "Schedules",
+    operation_id = "get_schedule_status",
     params(
         ("schedule_id" = Uuid, Path, description = "Schedule job ID")
     ),
@@ -67,6 +69,7 @@ pub async fn get_status(
     get,
     path = "/api/v1/schedules/{schedule_id}/result",
     tag = "Schedules",
+    operation_id = "get_schedule_result",
     params(
         ("schedule_id" = Uuid, Path, description = "Schedule job ID")
     ),

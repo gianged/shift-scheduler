@@ -73,6 +73,27 @@ staff and groups from the `sample-data/` directory into the data-service.
 3. `PUT /api/v1/groups/{id}` to set `parent_group_id` using returned IDs
 4. `POST /api/v1/memberships/batch` with real staff/group UUIDs
 
+## Database Schema
+
+### Data Service (`data_service_db`)
+
+**staff** -- id (uuid PK), name, email (unique), position, status (ACTIVE/INACTIVE),
+created_at, updated_at
+
+**staff_groups** -- id (uuid PK), name, parent_group_id (FK self, ON DELETE SET
+NULL), created_at, updated_at
+
+**group_memberships** -- staff_id (FK staff CASCADE), group_id (FK staff_groups
+CASCADE), composite PK
+
+### Scheduling Service (`scheduling_service_db`)
+
+**schedule_jobs** -- id (uuid PK), staff_group_id, period_begin_date, status
+(PENDING/PROCESSING/COMPLETED/FAILED), created_at, updated_at
+
+**shift_assignments** -- id (uuid PK), job_id (FK schedule_jobs CASCADE), staff_id,
+date, shift_type (MORNING/EVENING/DAY_OFF)
+
 ## API Overview
 
 ### Data Service (port 8180)
@@ -181,6 +202,11 @@ cargo clippy --workspace --all-targets -- -D warnings
   from the response buffer. This was not implemented as the current data volume
   (tens of staff per request) does not warrant the added lifetime complexity.
 
-  ## Future Work/On-Planning
+### Algorithm & Known Limitations
+
+The scheduler uses a greedy assignment algorithm: for each day, it iterates through
+staff members and assigns the first valid shift that satisfies all enabled rules. If a case, 3 staff taking EVENING the pervious day, then the config `no_morning_after_evening=true`, Morning is block for everyone. Remaining staff must take DAY_OFF, but if they don't have day off left, which is a disaster as well. I'm thinking if an algo could resolve this.
+
+## Future Work/On-Planning
 
 - **Circuit breaker** for Data Service calls -- would prevent cascade failures when data-service is unavailable by failing fast and auto-recovering after a configurable timeout. The decorator pattern (same approach as `CachedRepository`) makes this straightforward to add.
