@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 // region: Data Service Types
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type, ToSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Type, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[sqlx(type_name = "staff_status", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StaffStatus {
@@ -44,7 +44,7 @@ pub struct GroupMembership {
 
 // region: Scheduling Service Types
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type, ToSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Type, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[sqlx(type_name = "job_status", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum JobStatus {
@@ -54,7 +54,7 @@ pub enum JobStatus {
     Failed,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type, ToSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Type, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[sqlx(type_name = "shift_type", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ShiftType {

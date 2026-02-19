@@ -39,12 +39,18 @@ impl MembershipRepository for PgMembershipRepository {
         match output {
             Ok(_) => Ok(()),
             Err(sqlx::Error::Database(e)) => {
-                let msg = e.message();
-                if msg.contains("fk_gm_staff") {
-                    Err(DataServiceError::NotFound("Staff not found".to_string()))
-                } else if msg.contains("fk_gm_group") {
-                    Err(DataServiceError::NotFound("Group not found".to_string()))
-                } else if msg.contains("duplicate") || msg.contains("already exists") {
+                if let Some(constraint) = e.constraint() {
+                    match constraint {
+                        "fk_gm_staff" => {
+                            return Err(DataServiceError::NotFound("Staff not found".to_string()));
+                        }
+                        "fk_gm_group" => {
+                            return Err(DataServiceError::NotFound("Group not found".to_string()));
+                        }
+                        _ => {}
+                    }
+                }
+                if e.is_unique_violation() {
                     Err(DataServiceError::BadRequest(
                         "Staff already in group".to_string(),
                     ))

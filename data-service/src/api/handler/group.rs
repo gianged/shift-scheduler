@@ -75,6 +75,11 @@ pub async fn create(
     State(state): State<Arc<DataServiceAppState>>,
     Json(group): Json<CreateGroup>,
 ) -> Result<Json<ApiResponse<StaffGroup>>, DataServiceError> {
+    if group.name.trim().is_empty() {
+        return Err(DataServiceError::BadRequest(
+            "Name must not be empty".into(),
+        ));
+    }
     let output = state.group_repo.create(group).await?;
 
     Ok(Json(ApiResponse::ok(output)))

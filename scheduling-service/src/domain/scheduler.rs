@@ -9,6 +9,16 @@ use uuid::Uuid;
 
 use crate::domain::job::NewShiftAssignment;
 
+#[derive(Debug, Error)]
+pub enum ConfigError {
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("Parse error: {0}")]
+    Parse(#[from] toml::de::Error),
+    #[error("Invalid config: {0}")]
+    Invalid(String),
+}
+
 const PERIOD_DAYS: usize = 28;
 const DAYS_PER_WEEK: usize = 7;
 
@@ -16,34 +26,51 @@ const DAYS_PER_WEEK: usize = 7;
 #[serde(default)]
 pub struct SchedulingConfig {
     pub timezone: String,
-    pub min_day_off_per_week: u8,
-    pub max_day_off_per_week: u8,
+    pub min_day_off_per_week: Option<u8>,
+    pub max_day_off_per_week: Option<u8>,
     pub no_morning_after_evening: bool,
-    pub max_daily_shift_diff: u8,
+    pub max_daily_shift_diff: Option<u8>,
 }
 
 impl Default for SchedulingConfig {
     fn default() -> Self {
         Self {
             timezone: "UTC".to_string(),
-            min_day_off_per_week: 1,
-            max_day_off_per_week: 2,
+            min_day_off_per_week: Some(1),
+            max_day_off_per_week: Some(2),
             no_morning_after_evening: true,
-            max_daily_shift_diff: 1,
+            max_daily_shift_diff: Some(1),
         }
     }
 }
 
 impl SchedulingConfig {
-    pub fn load(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load(path: &str) -> Result<Self, ConfigError> {
         if !Path::new(path).exists() {
             tracing::info!("Config file not found at {path}, using defaults");
             return Ok(Self::default());
         }
         let content = std::fs::read_to_string(path)?;
         let config: Self = toml::from_str(&content)?;
+        config.validate()?;
         tracing::info!(?config, "Loaded scheduling config from {path}");
         Ok(config)
+    }
+
+    fn validate(&self) -> Result<(), ConfigError> {
+        if let (Some(min), Some(max)) = (self.min_day_off_per_week, self.max_day_off_per_week) {
+            if min > max {
+                return Err(ConfigError::Invalid(format!(
+                    "min_day_off_per_week ({min}) must be <= max_day_off_per_week ({max})"
+                )));
+            }
+            if max >= 7 {
+                return Err(ConfigError::Invalid(format!(
+                    "max_day_off_per_week ({max}) must be < 7"
+                )));
+            }
+        }
+        Ok(())
     }
 
     pub fn timezone(&self) -> Tz {
@@ -87,7 +114,7 @@ impl SchedulingRule for NoMorningAfterEveningRule {
 
     fn is_valid(&self, ctx: &AssignmentContext, candidate: &ShiftType) -> bool {
         !matches!(
-            (ctx.previous_shift.as_ref(), candidate),
+            (ctx.previous_shift, candidate),
             (Some(ShiftType::Evening), ShiftType::Morning)
         )
     }
@@ -152,15 +179,15 @@ impl SchedulingConfig {
         if self.no_morning_after_evening {
             rules.push(Box::new(NoMorningAfterEveningRule));
         }
-        rules.push(Box::new(MaxDayOffRule {
-            max: self.max_day_off_per_week,
-        }));
-        rules.push(Box::new(MinDayOffRule {
-            min: self.min_day_off_per_week,
-        }));
-        rules.push(Box::new(DailyBalanceRule {
-            max_diff: self.max_daily_shift_diff,
-        }));
+        if let Some(max) = self.max_day_off_per_week {
+            rules.push(Box::new(MaxDayOffRule { max }));
+        }
+        if let Some(min) = self.min_day_off_per_week {
+            rules.push(Box::new(MinDayOffRule { min }));
+        }
+        if let Some(max_diff) = self.max_daily_shift_diff {
+            rules.push(Box::new(DailyBalanceRule { max_diff }));
+        }
         rules
     }
 }
@@ -180,33 +207,44 @@ pub fn gen_schedule(
         "Starting schedule generation"
     );
 
-    let shift_options = [ShiftType::Morning, ShiftType::Evening, ShiftType::DayOff];
     let mut assignments: Vec<NewShiftAssignment> = Vec::new();
 
-    // per staff track both fields
     let mut previous_shifts: Vec<Option<ShiftType>> = vec![None; staff_ids.len()];
     let mut weekly_day_offs: Vec<u8> = vec![0; staff_ids.len()];
+
+    // Alternate staff iteration order per day for fairness
+    let staff_count = staff_ids.len();
+    let forward: Vec<usize> = (0..staff_count).collect();
+    let reverse: Vec<usize> = (0..staff_count).rev().collect();
 
     for day in 0..PERIOD_DAYS {
         let date = period_begin_date + Duration::days(day as i64);
         let day_in_week = day % DAYS_PER_WEEK;
         let days_remaining_in_week = (DAYS_PER_WEEK - 1 - day_in_week) as u8;
 
-        // Weekly counter reset on Monday
         if day_in_week == 0 {
             weekly_day_offs.fill(0);
         }
 
-        // track daily shift count for balance constraint
+        // Alternate Morning/Evening preference; DayOff always last to avoid greedy consumption
+        let shift_options = if day % 2 == 0 {
+            [ShiftType::Morning, ShiftType::Evening, ShiftType::DayOff]
+        } else {
+            [ShiftType::Evening, ShiftType::Morning, ShiftType::DayOff]
+        };
+
         let mut morning_count: usize = 0;
         let mut evening_count: usize = 0;
 
-        for (i, staff_id) in staff_ids.iter().enumerate() {
+        let order = if day % 2 == 0 { &forward } else { &reverse };
+
+        for &i in order {
+            let staff_id = &staff_ids[i];
             let mut assigned = false;
 
             for shift in &shift_options {
                 let ctx = AssignmentContext {
-                    previous_shift: previous_shifts[i].clone(),
+                    previous_shift: previous_shifts[i],
                     day_offs_this_week: weekly_day_offs[i],
                     days_remaining_in_week,
                     morning_count,
@@ -216,21 +254,17 @@ pub fn gen_schedule(
                 let ok = rules.iter().all(|rule| rule.is_valid(&ctx, shift));
 
                 if ok {
-                    if *shift == ShiftType::DayOff {
-                        weekly_day_offs[i] += 1;
-                    }
-                    if *shift == ShiftType::Morning {
-                        morning_count += 1;
-                    }
-                    if *shift == ShiftType::Evening {
-                        evening_count += 1;
+                    match *shift {
+                        ShiftType::DayOff => weekly_day_offs[i] += 1,
+                        ShiftType::Morning => morning_count += 1,
+                        ShiftType::Evening => evening_count += 1,
                     }
 
-                    previous_shifts[i] = Some(shift.clone());
+                    previous_shifts[i] = Some(*shift);
                     assignments.push(NewShiftAssignment {
                         staff_id: *staff_id,
                         date,
-                        shift_type: shift.clone(),
+                        shift_type: *shift,
                     });
                     assigned = true;
                     break;
@@ -416,34 +450,37 @@ mod tests {
                     .iter()
                     .filter(|a| a.shift_type == ShiftType::DayOff)
                     .count() as u8;
-                assert!(
-                    day_offs >= config.min_day_off_per_week,
-                    "Staff {sid} week {week}: {day_offs} < min {}",
-                    config.min_day_off_per_week
-                );
-                assert!(
-                    day_offs <= config.max_day_off_per_week,
-                    "Staff {sid} week {week}: {day_offs} > max {}",
-                    config.max_day_off_per_week
-                );
+                if let Some(min) = config.min_day_off_per_week {
+                    assert!(
+                        day_offs >= min,
+                        "Staff {sid} week {week}: {day_offs} < min {min}"
+                    );
+                }
+                if let Some(max) = config.max_day_off_per_week {
+                    assert!(
+                        day_offs <= max,
+                        "Staff {sid} week {week}: {day_offs} > max {max}"
+                    );
+                }
             }
         }
 
-        for day in 0..PERIOD_DAYS {
-            let date = begin_date + Duration::days(day as i64);
-            let morning = assignments
-                .iter()
-                .filter(|a| a.date == date && a.shift_type == ShiftType::Morning)
-                .count();
-            let evening = assignments
-                .iter()
-                .filter(|a| a.date == date && a.shift_type == ShiftType::Evening)
-                .count();
-            assert!(
-                morning.abs_diff(evening) <= config.max_daily_shift_diff as usize,
-                "Day {date}: morning={morning} evening={evening} exceeds max diff {}",
-                config.max_daily_shift_diff
-            );
+        if let Some(max_diff) = config.max_daily_shift_diff {
+            for day in 0..PERIOD_DAYS {
+                let date = begin_date + Duration::days(day as i64);
+                let morning = assignments
+                    .iter()
+                    .filter(|a| a.date == date && a.shift_type == ShiftType::Morning)
+                    .count();
+                let evening = assignments
+                    .iter()
+                    .filter(|a| a.date == date && a.shift_type == ShiftType::Evening)
+                    .count();
+                assert!(
+                    morning.abs_diff(evening) <= max_diff as usize,
+                    "Day {date}: morning={morning} evening={evening} exceeds max diff {max_diff}"
+                );
+            }
         }
     }
 
@@ -479,7 +516,7 @@ mod tests {
         let staff_ids: Vec<_> = (0..4).map(|_| Uuid::new_v4()).collect();
         let config = SchedulingConfig {
             no_morning_after_evening: false,
-            max_daily_shift_diff: 4,
+            max_daily_shift_diff: Some(4),
             ..default_config()
         };
         let rules = config.build_rules();

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use async_trait::async_trait;
 use opentelemetry::global;
 use opentelemetry::propagation::Injector;
@@ -13,9 +15,15 @@ pub struct HttpDataServiceClient {
     base_url: String,
 }
 
+const MAX_RETRIES: u32 = 3;
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
 impl HttpDataServiceClient {
     pub fn new(base_url: String) -> Self {
-        let client = Client::new();
+        let client = Client::builder()
+            .timeout(REQUEST_TIMEOUT)
+            .build()
+            .expect("Failed to build HTTP client");
         Self { client, base_url }
     }
 }
@@ -44,39 +52,58 @@ impl DataServiceClient for HttpDataServiceClient {
             self.base_url
         );
 
-        let mut headers = header::HeaderMap::new();
-        let cx = tracing::Span::current().context();
-        global::get_text_map_propagator(|propagator| {
-            propagator.inject_context(&cx, &mut HeaderMapInjector(&mut headers));
-        });
-
         tracing::debug!(%url, "Requesting resolved members");
 
-        let res = self
-            .client
-            .get(&url)
-            .headers(headers)
-            .send()
-            .await
-            .map_err(|e| {
-                SchedulingServiceError::DataService(format!("Failed to reach Data Service:{e}"))
-            })?;
+        let mut last_err = None;
 
-        tracing::debug!(status = %res.status(), "Data service responded");
+        for attempt in 1..=MAX_RETRIES {
+            let mut headers = header::HeaderMap::new();
+            let cx = tracing::Span::current().context();
+            global::get_text_map_propagator(|propagator| {
+                propagator.inject_context(&cx, &mut HeaderMapInjector(&mut headers));
+            });
 
-        if !res.status().is_success() {
-            return Err(SchedulingServiceError::DataService(format!(
-                "Data Service returned status {}",
-                res.status()
-            )));
+            match self.client.get(&url).headers(headers).send().await {
+                Ok(res) => {
+                    tracing::debug!(status = %res.status(), attempt, "Data service responded");
+
+                    if !res.status().is_success() {
+                        return Err(SchedulingServiceError::DataService(format!(
+                            "Data Service returned status {}",
+                            res.status()
+                        )));
+                    }
+
+                    let api_response =
+                        res.json::<ApiResponse<Vec<Staff>>>().await.map_err(|e| {
+                            SchedulingServiceError::DataService(format!(
+                                "Failed to deserialize response: {e}"
+                            ))
+                        })?;
+
+                    return api_response.data.ok_or_else(|| {
+                        SchedulingServiceError::DataService("No data in response".to_string())
+                    });
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        attempt,
+                        max_retries = MAX_RETRIES,
+                        error = %e,
+                        "Request to Data Service failed, retrying"
+                    );
+                    last_err = Some(e);
+                    if attempt < MAX_RETRIES {
+                        tokio::time::sleep(Duration::from_millis(100 * 2u64.pow(attempt - 1)))
+                            .await;
+                    }
+                }
+            }
         }
 
-        let api_response = res.json::<ApiResponse<Vec<Staff>>>().await.map_err(|e| {
-            SchedulingServiceError::DataService(format!("Failed to deserialize response: {e}"))
-        })?;
-
-        api_response
-            .data
-            .ok_or_else(|| SchedulingServiceError::DataService("No data in response".to_string()))
+        Err(SchedulingServiceError::DataService(format!(
+            "Failed to reach Data Service after {MAX_RETRIES} attempts: {}",
+            last_err.expect("at least one error occurred")
+        )))
     }
 }

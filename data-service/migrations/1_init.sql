@@ -34,3 +34,19 @@ CREATE INDEX idx_staff_groups_parent ON staff_groups(parent_group_id);
 CREATE INDEX idx_gm_group ON group_memberships(group_id);
 
 CREATE INDEX idx_gm_staff ON group_memberships(staff_id);
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tr_staff_updated_at
+    BEFORE UPDATE ON staff
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER tr_staff_groups_updated_at
+    BEFORE UPDATE ON staff_groups
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

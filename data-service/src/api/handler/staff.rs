@@ -74,9 +74,29 @@ pub async fn create(
     State(state): State<Arc<DataServiceAppState>>,
     Json(staff): Json<CreateStaff>,
 ) -> Result<Json<ApiResponse<Staff>>, DataServiceError> {
+    validate_create_staff(&staff)?;
     let output = state.staff_repo.create(staff).await?;
 
     Ok(Json(ApiResponse::ok(output)))
+}
+
+fn validate_create_staff(staff: &CreateStaff) -> Result<(), DataServiceError> {
+    if staff.name.trim().is_empty() {
+        return Err(DataServiceError::BadRequest(
+            "Name must not be empty".into(),
+        ));
+    }
+    if staff.email.trim().is_empty() {
+        return Err(DataServiceError::BadRequest(
+            "Email must not be empty".into(),
+        ));
+    }
+    if staff.position.trim().is_empty() {
+        return Err(DataServiceError::BadRequest(
+            "Position must not be empty".into(),
+        ));
+    }
+    Ok(())
 }
 
 #[utoipa::path(

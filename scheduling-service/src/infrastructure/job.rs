@@ -95,8 +95,7 @@ impl JobRepository for PgJobRepository {
         let job_ids: Vec<Uuid> = vec![job_id; assignments.len()];
         let staff_ids: Vec<Uuid> = assignments.iter().map(|a| a.staff_id).collect();
         let dates: Vec<NaiveDate> = assignments.iter().map(|a| a.date).collect();
-        let shift_types: Vec<ShiftType> =
-            assignments.iter().map(|a| a.shift_type.clone()).collect();
+        let shift_types: Vec<ShiftType> = assignments.iter().map(|a| a.shift_type).collect();
 
         sqlx::query(
             r#"
