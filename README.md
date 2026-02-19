@@ -210,3 +210,4 @@ staff members and assigns the first valid shift that satisfies all enabled rules
 ## Future Work/On-Planning
 
 - **Circuit breaker** for Data Service calls -- would prevent cascade failures when data-service is unavailable by failing fast and auto-recovering after a configurable timeout. The decorator pattern (same approach as `CachedRepository`) makes this straightforward to add.
+- Just incase, I made some improvement on **improvement** branch, since I'm out of time on the submit deadline, I will merge later.
