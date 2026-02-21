@@ -8,8 +8,11 @@ use scheduling_service::{
     infrastructure::{client::HttpDataServiceClient, job::PgJobRepository},
 };
 use sqlx::postgres::PgPoolOptions;
-use std::{env, sync::Arc};
+use std::{env, net::SocketAddr, sync::Arc};
 use tokio::net::TcpListener;
+use tower_governor::{
+    GovernorLayer, governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor,
+};
 use tower_http::trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 use utoipa::OpenApi;
@@ -64,6 +67,14 @@ async fn main() {
         scheduling_service: scheduling_service.clone(),
     });
 
+    let governor_conf = GovernorConfigBuilder::default()
+        .per_second(2)
+        .burst_size(10)
+        .key_extractor(SmartIpKeyExtractor)
+        .use_headers()
+        .finish()
+        .expect("Failed to build governor config");
+
     let app = Router::new()
         .route(
             "/headpat",
@@ -84,6 +95,8 @@ async fn main() {
         )
         // Swagger UI
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        // Rate limiting (per-IP, 2 req/s with burst of 10)
+        .layer(GovernorLayer::new(governor_conf))
         // tracing log (turn request into info level)
         .layer(
             TraceLayer::new_for_http()
@@ -102,10 +115,13 @@ async fn main() {
         .await
         .expect("Failed to bind");
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shared::shutdown::shutdown_signal())
-        .await
-        .expect("Oppsie! Server crashed!");
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shared::shutdown::shutdown_signal())
+    .await
+    .expect("Oppsie! Server crashed!");
 
     // Server stopped accepting new requests; wait for in-flight background jobs
     let task_tracker = scheduling_service.task_tracker();
