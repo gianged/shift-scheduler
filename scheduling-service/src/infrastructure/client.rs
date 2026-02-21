@@ -101,7 +101,7 @@ impl DataServiceClient for HttpDataServiceClient {
             }
         }
 
-        Err(SchedulingServiceError::DataService(format!(
+        Err(SchedulingServiceError::DataServiceUnavailable(format!(
             "Failed to reach Data Service after {MAX_RETRIES} attempts: {}",
             last_err.expect("at least one error occurred")
         )))

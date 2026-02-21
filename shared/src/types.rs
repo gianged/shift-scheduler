@@ -52,6 +52,7 @@ pub enum JobStatus {
     Processing,
     Completed,
     Failed,
+    WaitingForRetry,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Type, ToSchema)]

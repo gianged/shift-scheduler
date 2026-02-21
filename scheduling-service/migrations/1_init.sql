@@ -2,7 +2,8 @@ CREATE TYPE job_status AS ENUM(
     'PENDING',
     'PROCESSING',
     'COMPLETED',
-    'FAILED'
+    'FAILED',
+    'WAITING_FOR_RETRY'
 );
 
 CREATE TYPE shift_type AS ENUM(

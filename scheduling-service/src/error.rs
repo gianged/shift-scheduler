@@ -21,6 +21,12 @@ pub enum SchedulingServiceError {
 
     #[error("Data Service Error: {0}")]
     DataService(String),
+
+    #[error("Data Service unavailable: {0}")]
+    DataServiceUnavailable(String),
+
+    #[error("Circuit breaker is open - data service unavailable")]
+    CircuitOpen,
 }
 
 impl IntoResponse for SchedulingServiceError {
@@ -34,6 +40,11 @@ impl IntoResponse for SchedulingServiceError {
                 "Oof, Something went wrong while accessing the database.".into(),
             ),
             Self::DataService(message) => (StatusCode::BAD_GATEWAY, message.clone()),
+            Self::DataServiceUnavailable(message) => (StatusCode::BAD_GATEWAY, message.clone()),
+            Self::CircuitOpen => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Data service is currently unavailable, please try again later".into(),
+            ),
         };
 
         if status.is_server_error() {

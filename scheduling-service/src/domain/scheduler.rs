@@ -7,7 +7,9 @@ use shared::types::ShiftType;
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::domain::circuit_breaker::CircuitBreakerConfig;
 use crate::domain::job::NewShiftAssignment;
+use crate::infrastructure::health_check::HealthCheckSettings;
 
 #[derive(Debug, Error)]
 pub enum ConfigError {
@@ -30,6 +32,8 @@ pub struct SchedulingConfig {
     pub max_day_off_per_week: Option<u8>,
     pub no_morning_after_evening: bool,
     pub max_daily_shift_diff: Option<u8>,
+    pub circuit_breaker: CircuitBreakerConfig,
+    pub health_check: HealthCheckSettings,
 }
 
 impl Default for SchedulingConfig {
@@ -40,6 +44,8 @@ impl Default for SchedulingConfig {
             max_day_off_per_week: Some(2),
             no_morning_after_evening: true,
             max_daily_shift_diff: Some(1),
+            circuit_breaker: CircuitBreakerConfig::default(),
+            health_check: HealthCheckSettings::default(),
         }
     }
 }

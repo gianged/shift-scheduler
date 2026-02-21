@@ -6,3 +6,11 @@ min_day_off_per_week = 1
 max_day_off_per_week = 2
 no_morning_after_evening = true
 max_daily_shift_diff = 1
+
+[circuit_breaker]
+failure_threshold = 5   # Consecutive failures before circuit opens
+cooldown_secs = 30      # Seconds before circuit transitions to half-open
+
+[health_check]
+interval_secs = 10      # Seconds between data service health pings
+timeout_secs = 5        # Timeout for each health check request

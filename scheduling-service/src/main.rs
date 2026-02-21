@@ -5,11 +5,17 @@ use axum::{
 use scheduling_service::{
     api::{handler::schedule, state::SchedulingAppState},
     domain::{scheduler::SchedulingConfig, service::SchedulingService},
-    infrastructure::{client::HttpDataServiceClient, job::PgJobRepository},
+    infrastructure::{
+        circuit_breaker::CircuitBreakerClient,
+        client::HttpDataServiceClient,
+        health_check::{HealthCheckConfig, spawn_health_check},
+        job::PgJobRepository,
+    },
 };
 use sqlx::postgres::PgPoolOptions;
 use std::{env, net::SocketAddr, sync::Arc};
 use tokio::net::TcpListener;
+use tokio_util::sync::CancellationToken;
 use tower_governor::{
     GovernorLayer, governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor,
 };
@@ -51,17 +57,34 @@ async fn main() {
         .await
         .expect("Failed to run database migrations");
 
-    let job_repo = Arc::new(PgJobRepository::new(pool.clone()));
-    let data_client = Arc::new(HttpDataServiceClient::new(data_service_url));
     let config_path =
         env::var("SCHEDULING_CONFIG_PATH").unwrap_or_else(|_| "scheduling.toml".to_string());
     let config = SchedulingConfig::load(&config_path).expect("Failed to load scheduling config");
+
+    let job_repo = Arc::new(PgJobRepository::new(pool.clone()));
+
+    // Wrap HTTP client with circuit breaker decorator
+    let http_client = Arc::new(HttpDataServiceClient::new(data_service_url.clone()));
+    let health_config = HealthCheckConfig::from_settings(&config.health_check, &data_service_url);
+    let (cb_client, breaker) =
+        CircuitBreakerClient::new(http_client, config.circuit_breaker.clone());
+    let data_client = Arc::new(cb_client);
 
     let scheduling_service = Arc::new(SchedulingService::new(job_repo, data_client, config));
 
     if let Err(e) = scheduling_service.recover_stale_jobs().await {
         tracing::warn!("Failed to recover stale jobs: {e}");
     }
+
+    // Spawn proactive health check for data service
+    let cancel_token = CancellationToken::new();
+    spawn_health_check(
+        health_config,
+        breaker,
+        scheduling_service.clone(),
+        scheduling_service.task_tracker(),
+        cancel_token.clone(),
+    );
 
     let state = Arc::new(SchedulingAppState {
         scheduling_service: scheduling_service.clone(),
@@ -123,7 +146,8 @@ async fn main() {
     .await
     .expect("Oppsie! Server crashed!");
 
-    // Server stopped accepting new requests; wait for in-flight background jobs
+    // Server stopped accepting new requests; cancel health check and wait for background jobs
+    cancel_token.cancel();
     let task_tracker = scheduling_service.task_tracker();
     task_tracker.close();
     tracing::info!("Waiting for background jobs to finish...");
