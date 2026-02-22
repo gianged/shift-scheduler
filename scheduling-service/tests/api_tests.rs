@@ -6,7 +6,7 @@ use axum::{
     http::{Request, StatusCode},
     routing::{get, post},
 };
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate, Utc};
 use http_body_util::BodyExt;
 use serde_json::json;
 use tower::ServiceExt;
@@ -20,6 +20,20 @@ use scheduling_service::{
     },
 };
 use shared::types::{JobStatus, ScheduleJob, ShiftAssignment, ShiftType};
+
+fn next_monday() -> NaiveDate {
+    let today = Utc::now().date_naive();
+    let days_until_monday = (i64::from(chrono::Weekday::Mon.num_days_from_monday()) + 7
+        - i64::from(today.weekday().num_days_from_monday()))
+        % 7;
+    // If today is Monday, use next Monday
+    let days_until_monday = if days_until_monday == 0 {
+        7
+    } else {
+        days_until_monday
+    };
+    today + chrono::Duration::days(days_until_monday)
+}
 
 fn build_test_app(mock_repo: MockJobRepository, mock_client: MockDataServiceClient) -> Router {
     let svc = Arc::new(SchedulingService::new(
@@ -48,10 +62,10 @@ fn make_job(id: Uuid, status: JobStatus) -> ScheduleJob {
     ScheduleJob {
         id,
         staff_group_id: Uuid::new_v4(),
-        period_begin_date: NaiveDate::from_ymd_opt(2026, 2, 16).unwrap(),
+        period_begin_date: next_monday(),
         status,
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
     }
 }
 
@@ -76,7 +90,7 @@ async fn submit_schedule_returns_202() {
 
     let body = json!({
         "staff_group_id": job.staff_group_id,
-        "period_begin_date": "2026-02-16"
+        "period_begin_date": next_monday().to_string()
     });
 
     let res = app
@@ -157,7 +171,7 @@ async fn get_result_returns_schedule_result() {
         id: Uuid::new_v4(),
         job_id,
         staff_id: Uuid::new_v4(),
-        date: NaiveDate::from_ymd_opt(2026, 2, 16).unwrap(),
+        date: next_monday(),
         shift_type: ShiftType::Morning,
     };
     let assignments = vec![assignment];
@@ -258,4 +272,31 @@ async fn get_result_not_found_returns_404() {
         .unwrap();
 
     assert_eq!(res.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn submit_schedule_past_date_returns_400() {
+    let repo = MockJobRepository::new();
+    let client = MockDataServiceClient::new();
+    let app = build_test_app(repo, client);
+
+    // 2025-01-06 is a Monday in the past
+    let body = json!({
+        "staff_group_id": Uuid::new_v4(),
+        "period_begin_date": "2025-01-06"
+    });
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/schedules")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 }

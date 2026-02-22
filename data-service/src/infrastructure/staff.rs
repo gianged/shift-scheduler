@@ -8,6 +8,7 @@ use crate::{
     error::DataServiceError,
 };
 
+/// PostgreSQL-backed implementation of [`StaffRepository`].
 pub struct PgStaffRepository {
     pool: PgPool,
 }
@@ -117,7 +118,7 @@ impl StaffRepository for PgStaffRepository {
         .fetch_optional(&self.pool)
         .await?;
 
-        output.ok_or_else(|| DataServiceError::NotFound("Staff not found".to_string()))
+        output.ok_or_else(|| DataServiceError::NotFound("Staff not found".into()))
     }
 
     #[tracing::instrument(skip(self))]
@@ -134,7 +135,7 @@ impl StaffRepository for PgStaffRepository {
         .await?;
 
         if output.rows_affected() == 0 {
-            return Err(DataServiceError::NotFound("Staff not found".to_string()));
+            return Err(DataServiceError::NotFound("Staff not found".into()));
         }
 
         Ok(())
@@ -153,7 +154,7 @@ impl StaffRepository for PgStaffRepository {
         .await?;
 
         if output.rows_affected() == 0 {
-            return Err(DataServiceError::NotFound("Staff not found".to_string()));
+            return Err(DataServiceError::NotFound("Staff not found".into()));
         }
 
         Ok(())

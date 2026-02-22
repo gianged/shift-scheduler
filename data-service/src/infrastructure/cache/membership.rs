@@ -8,6 +8,7 @@ use super::client::RedisCache;
 use crate::domain::membership::{AddMembership, MembershipRepository};
 use crate::error::DataServiceError;
 
+/// TTL in seconds for all membership-related cache entries.
 const TTL: u64 = 300;
 
 fn key_group_members(group_id: Uuid) -> String {
@@ -22,6 +23,10 @@ fn key_resolved(group_id: Uuid) -> String {
     format!("data-service:membership:group:{group_id}:resolved")
 }
 
+/// Cache-aside decorator around a [`MembershipRepository`].
+///
+/// Reads check Redis first; writes delegate to the inner repository and
+/// invalidate relevant cache keys.
 pub struct CachedMembershipRepository {
     inner: Arc<dyn MembershipRepository>,
     cache: RedisCache,

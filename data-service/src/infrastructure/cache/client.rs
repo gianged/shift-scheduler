@@ -2,12 +2,14 @@ use redis::AsyncCommands;
 use redis::aio::ConnectionManager;
 use serde::{Serialize, de::DeserializeOwned};
 
+/// Redis cache client backed by a multiplexed connection manager.
 #[derive(Clone)]
 pub struct RedisCache {
     conn: ConnectionManager,
 }
 
 impl RedisCache {
+    /// Connects to Redis at the given URL and returns a cache client.
     pub async fn new(redis_url: &str) -> Result<Self, redis::RedisError> {
         let client = redis::Client::open(redis_url)?;
         let conn = ConnectionManager::new(client).await?;
@@ -15,6 +17,7 @@ impl RedisCache {
         Ok(Self { conn })
     }
 
+    /// Attempts to retrieve and deserialize a cached value. Returns `None` on miss or error.
     pub async fn get<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
         let mut conn = self.conn.clone();
         let output: Result<Option<String>, _> = conn.get(key).await;
@@ -41,6 +44,7 @@ impl RedisCache {
         }
     }
 
+    /// Serializes and stores a value with the given TTL. Logs on failure.
     pub async fn set<T: Serialize>(&self, key: &str, value: &T, ttl_seconds: u64) {
         let mut conn = self.conn.clone();
 
@@ -57,6 +61,7 @@ impl RedisCache {
         }
     }
 
+    /// Deletes the specified keys from the cache.
     pub async fn delete(&self, keys: &[&str]) {
         if keys.is_empty() {
             return;
@@ -68,6 +73,7 @@ impl RedisCache {
         }
     }
 
+    /// Scans for keys matching the glob pattern and deletes them in bulk.
     pub async fn delete_by_pattern(&self, pattern: &str) {
         let mut conn = self.conn.clone();
         let mut cursor: u64 = 0;

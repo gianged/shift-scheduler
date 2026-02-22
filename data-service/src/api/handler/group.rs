@@ -54,10 +54,8 @@ pub async fn find_by_id(
 ) -> Result<Json<ApiResponse<StaffGroup>>, DataServiceError> {
     let output = state.group_repo.find_by_id(id).await?;
 
-    match output {
-        Some(g) => Ok(Json(ApiResponse::ok(g))),
-        None => Err(DataServiceError::NotFound("Group not found".to_string())),
-    }
+    let group = output.ok_or_else(|| DataServiceError::NotFound("Group not found".into()))?;
+    Ok(Json(ApiResponse::ok(group)))
 }
 
 #[utoipa::path(
@@ -75,6 +73,11 @@ pub async fn create(
     State(state): State<Arc<DataServiceAppState>>,
     Json(group): Json<CreateGroup>,
 ) -> Result<Json<ApiResponse<StaffGroup>>, DataServiceError> {
+    if group.name.trim().is_empty() {
+        return Err(DataServiceError::BadRequest(
+            "Name must not be empty".into(),
+        ));
+    }
     let output = state.group_repo.create(group).await?;
 
     Ok(Json(ApiResponse::ok(output)))

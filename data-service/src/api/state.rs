@@ -4,6 +4,7 @@ use crate::domain::{
     group::GroupRepository, membership::MembershipRepository, staff::StaffRepository,
 };
 
+/// Shared application state for the data service axum router.
 pub struct DataServiceAppState {
     pub staff_repo: Arc<dyn StaffRepository>,
     pub group_repo: Arc<dyn GroupRepository>,

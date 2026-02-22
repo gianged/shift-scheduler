@@ -52,6 +52,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/headpat"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   scheduling-service:
     build:
@@ -70,7 +75,30 @@ services:
       postgres:
         condition: service_healthy
       data-service:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/headpat"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/proxy_params:/etc/nginx/proxy_params:ro
+    depends_on:
+      data-service:
+        condition: service_healthy
+      scheduling-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/headpat"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   seed:
     image: alpine/curl:latest
@@ -81,7 +109,7 @@ services:
       DATA_SERVICE_URL: http://data-service:8080
     depends_on:
       data-service:
-        condition: service_started
+        condition: service_healthy
     entrypoint: ["sh", "/seed.sh"]
     restart: "no"
 

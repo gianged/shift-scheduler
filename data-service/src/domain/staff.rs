@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::error::DataServiceError;
 
+/// Request payload for creating a new staff member.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateStaff {
     pub name: String,
@@ -13,6 +14,7 @@ pub struct CreateStaff {
     pub position: String,
 }
 
+/// Request payload for partially updating an existing staff member. All fields are optional.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateStaff {
     pub name: Option<String>,
@@ -21,6 +23,7 @@ pub struct UpdateStaff {
     pub status: Option<StaffStatus>,
 }
 
+/// Persistence operations for staff members.
 #[cfg_attr(feature = "test-support", mockall::automock)]
 #[async_trait]
 pub trait StaffRepository: Send + Sync {

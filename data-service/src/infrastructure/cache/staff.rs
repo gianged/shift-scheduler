@@ -8,14 +8,21 @@ use super::client::RedisCache;
 use crate::domain::staff::{CreateStaff, StaffRepository, UpdateStaff};
 use crate::error::DataServiceError;
 
+/// Cache key for the full staff list.
 const KEY_ALL: &str = "data-service:staff:all";
+/// TTL in seconds for the full staff list cache entry.
 const TTL_ALL: u64 = 300;
+/// TTL in seconds for individual staff-by-id cache entries.
 const TTL_BY_ID: u64 = 600;
 
 fn key_by_id(id: Uuid) -> String {
     format!("data-service:staff:id:{id}")
 }
 
+/// Cache-aside decorator around a [`StaffRepository`].
+///
+/// Reads check Redis first; writes delegate to the inner repository and
+/// invalidate relevant cache keys.
 pub struct CachedStaffRepository {
     inner: Arc<dyn StaffRepository>,
     cache: RedisCache,

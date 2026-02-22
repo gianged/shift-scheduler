@@ -8,14 +8,21 @@ use super::client::RedisCache;
 use crate::domain::group::{CreateGroup, GroupRepository, UpdateGroup};
 use crate::error::DataServiceError;
 
+/// Cache key for the full group list.
 const KEY_ALL: &str = "data-service:groups:all";
+/// TTL in seconds for the full group list cache entry.
 const TTL_ALL: u64 = 300;
+/// TTL in seconds for individual group-by-id cache entries.
 const TTL_BY_ID: u64 = 600;
 
 fn key_by_id(id: Uuid) -> String {
     format!("data-service:groups:id:{id}")
 }
 
+/// Cache-aside decorator around a [`GroupRepository`].
+///
+/// Reads check Redis first; writes delegate to the inner repository and
+/// invalidate relevant cache keys.
 pub struct CachedGroupRepository {
     inner: Arc<dyn GroupRepository>,
     cache: RedisCache,

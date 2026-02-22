@@ -12,6 +12,8 @@ use crate::domain::job_state::PendingJob;
 use crate::domain::scheduler::{SchedulingConfig, SchedulingRule, gen_schedule};
 use crate::error::SchedulingServiceError;
 
+/// Orchestrates schedule job lifecycle: submission, processing, status queries,
+/// and recovery of stale or retry-waiting jobs.
 pub struct SchedulingService {
     job_repo: Arc<dyn JobRepository>,
     data_client: Arc<dyn DataServiceClient>,
@@ -21,6 +23,7 @@ pub struct SchedulingService {
 }
 
 impl SchedulingService {
+    /// Creates a new scheduling service with the given repository, data client, and config.
     pub fn new(
         job_repo: Arc<dyn JobRepository>,
         data_client: Arc<dyn DataServiceClient>,
@@ -40,6 +43,8 @@ impl SchedulingService {
         &self.task_tracker
     }
 
+    /// Validates the request, creates a new schedule job in the database, and spawns
+    /// asynchronous processing. Returns the created job immediately (fire-and-forget).
     #[tracing::instrument(skip(self))]
     pub async fn submit_schedule(
         &self,
@@ -48,14 +53,14 @@ impl SchedulingService {
     ) -> Result<ScheduleJob, SchedulingServiceError> {
         if period_begin_date.weekday() != chrono::Weekday::Mon {
             return Err(SchedulingServiceError::BadRequest(
-                "period_begin_date must be a Monday".to_string(),
+                "period_begin_date must be a Monday".into(),
             ));
         }
 
         let today = shared::time::today_in(self.config.timezone());
         if period_begin_date < today {
             return Err(SchedulingServiceError::BadRequest(
-                "period_begin_date must not be in the past".to_string(),
+                "period_begin_date must not be in the past".into(),
             ));
         }
 
@@ -65,9 +70,10 @@ impl SchedulingService {
             .await?;
 
         let pending_job = PendingJob::from_schedule_job(job.clone()).ok_or_else(|| {
+            let job_id = job.id;
+            let job_status = job.status;
             SchedulingServiceError::Internal(format!(
-                "Newly created job {} has unexpected status {:?}",
-                job.id, job.status
+                "Newly created job {job_id} has unexpected status {job_status:?}"
             ))
         })?;
 
@@ -76,6 +82,7 @@ impl SchedulingService {
         Ok(job)
     }
 
+    /// Spawns a background task to process the given pending job.
     pub fn spawn_process_job(&self, pending_job: PendingJob) {
         let job_id = pending_job.id();
         let staff_group_id = pending_job.inner().staff_group_id;
@@ -106,9 +113,9 @@ impl SchedulingService {
         let job = self.get_status(job_id).await?;
 
         if job.status != JobStatus::Completed {
+            let status = job.status;
             return Err(SchedulingServiceError::BadRequest(format!(
-                "Job is not completed, current status: {:?}",
-                job.status
+                "Job is not completed, current status: {status:?}"
             )));
         }
 
@@ -122,40 +129,87 @@ impl SchedulingService {
         })
     }
 
+    /// Recovers jobs left in `Processing` state (e.g., from a previous crash) by resetting
+    /// them to `Pending` and re-spawning processing. Also retries any `WaitingForRetry` jobs.
     #[tracing::instrument(skip(self))]
     pub async fn recover_stale_jobs(&self) -> Result<(), SchedulingServiceError> {
         let stale_jobs = self.job_repo.find_by_status(JobStatus::Processing).await?;
 
         if stale_jobs.is_empty() {
             tracing::info!("No stale jobs to recover");
+        } else {
+            tracing::info!(count = stale_jobs.len(), "Recovering stale jobs");
+            for job in stale_jobs {
+                let job_id = job.id;
+                tracing::info!(%job_id, "Recovering stale job");
+
+                self.job_repo.delete_assignments(job_id).await?;
+                self.job_repo
+                    .update_status(job_id, JobStatus::Pending)
+                    .await?;
+
+                self.respawn_as_pending(job_id).await?;
+            }
+        }
+
+        // Also recover jobs waiting for retry from a previous run
+        self.retry_waiting_jobs().await?;
+
+        Ok(())
+    }
+
+    /// Resets all `WaitingForRetry` jobs to `Pending` and re-spawns processing.
+    /// Called by the health check when the data service recovers.
+    #[tracing::instrument(skip(self))]
+    pub async fn retry_waiting_jobs(&self) -> Result<(), SchedulingServiceError> {
+        let waiting_jobs = self
+            .job_repo
+            .find_by_status(JobStatus::WaitingForRetry)
+            .await?;
+
+        if waiting_jobs.is_empty() {
+            tracing::info!("No waiting-for-retry jobs to retry");
             return Ok(());
         }
 
-        tracing::info!(count = stale_jobs.len(), "Recovering stale jobs");
+        tracing::info!(
+            count = waiting_jobs.len(),
+            "Retrying waiting-for-retry jobs"
+        );
 
-        for job in stale_jobs {
+        for job in waiting_jobs {
             let job_id = job.id;
-            tracing::info!(%job_id, "Recovering stale job");
+            tracing::info!(%job_id, "Retrying waiting job");
 
-            self.job_repo.delete_assignments(job_id).await?;
             self.job_repo
                 .update_status(job_id, JobStatus::Pending)
                 .await?;
 
-            let refreshed = self.job_repo.find_by_id(job_id).await?;
-            if let Some(job) = refreshed {
-                if let Some(pending) = PendingJob::from_schedule_job(job) {
-                    self.spawn_process_job(pending);
-                } else {
-                    tracing::warn!(%job_id, "Job no longer in Pending status after reset");
-                }
-            }
+            self.respawn_as_pending(job_id).await?;
         }
 
         Ok(())
     }
+
+    /// Reloads a job from the database and spawns processing if it is in `Pending` status.
+    async fn respawn_as_pending(&self, job_id: Uuid) -> Result<(), SchedulingServiceError> {
+        let Some(job) = self.job_repo.find_by_id(job_id).await? else {
+            return Ok(());
+        };
+        if let Some(pending) = PendingJob::from_schedule_job(job) {
+            self.spawn_process_job(pending);
+        } else {
+            tracing::warn!(%job_id, "Job no longer in Pending status after reset");
+        }
+        Ok(())
+    }
 }
 
+/// Processes a single schedule job: transitions to `Processing`, fetches staff from the
+/// data service, generates the schedule, and saves assignments.
+///
+/// On data-service connectivity errors (`CircuitOpen`, `DataServiceUnavailable`), the job
+/// is moved to `WaitingForRetry` instead of `Failed`.
 #[tracing::instrument(skip(pending_job, repo, client, rules), fields(job_id = %pending_job.id()))]
 async fn process_job(
     pending_job: PendingJob,
@@ -173,9 +227,22 @@ async fn process_job(
 
     let members = match client.get_resolved_members(staff_group_id).await {
         Ok(m) => m,
+        Err(
+            e @ (SchedulingServiceError::CircuitOpen
+            | SchedulingServiceError::DataServiceUnavailable(_)),
+        ) => {
+            let (_waiting, id, status) = processing_job.wait_for_retry();
+            if let Err(e) = repo.update_status(id, status).await {
+                tracing::error!(%id, "Failed to mark job as waiting for retry: {e}");
+            }
+            tracing::warn!(%id, "Job marked as waiting for retry due to data service unavailability");
+            return Err(e);
+        }
         Err(e) => {
             let (_failed, id, status) = processing_job.fail();
-            repo.update_status(id, status).await.ok();
+            if let Err(e) = repo.update_status(id, status).await {
+                tracing::error!(%id, "Failed to mark job as failed: {e}");
+            }
             return Err(e);
         }
     };
@@ -195,7 +262,9 @@ async fn process_job(
         }
         Err(e) => {
             let (_failed, id, status) = processing_job.fail();
-            repo.update_status(id, status).await.ok();
+            if let Err(update_err) = repo.update_status(id, status).await {
+                tracing::error!(%id, "Failed to mark job as failed: {update_err}");
+            }
             tracing::error!("Scheduling failed: {e}");
             return Err(SchedulingServiceError::Internal(format!(
                 "Scheduling failed: {e}"
@@ -475,5 +544,73 @@ mod tests {
         let assignments = saved.lock().unwrap();
         assert_eq!(assignments.len(), 28);
         assert!(assignments.iter().all(|a| a.staff_id == active_id));
+    }
+
+    #[tokio::test]
+    async fn process_job_circuit_open_marks_waiting_for_retry() {
+        let job = make_job(JobStatus::Pending);
+        let pending = PendingJob::from_schedule_job(job).unwrap();
+
+        let mut repo = MockJobRepository::new();
+
+        let statuses = Arc::new(Mutex::new(Vec::new()));
+        let statuses_clone = statuses.clone();
+        repo.expect_update_status().returning(move |_, status| {
+            statuses_clone.lock().unwrap().push(status);
+            Ok(())
+        });
+
+        let mut client = MockDataServiceClient::new();
+        client
+            .expect_get_resolved_members()
+            .returning(|_| Err(SchedulingServiceError::CircuitOpen));
+
+        let rules = Arc::new(SchedulingConfig::default().build_rules());
+
+        let output = process_job(pending, Arc::new(repo), Arc::new(client), rules).await;
+        assert!(output.is_err());
+        assert!(matches!(
+            output.unwrap_err(),
+            SchedulingServiceError::CircuitOpen
+        ));
+
+        // Verify status transitions: Pending -> Processing -> WaitingForRetry
+        let recorded = statuses.lock().unwrap();
+        assert_eq!(recorded.len(), 2);
+        assert_eq!(recorded[0], JobStatus::Processing);
+        assert_eq!(recorded[1], JobStatus::WaitingForRetry);
+    }
+
+    #[tokio::test]
+    async fn process_job_data_service_unavailable_marks_waiting_for_retry() {
+        let job = make_job(JobStatus::Pending);
+        let pending = PendingJob::from_schedule_job(job).unwrap();
+
+        let mut repo = MockJobRepository::new();
+
+        let statuses = Arc::new(Mutex::new(Vec::new()));
+        let statuses_clone = statuses.clone();
+        repo.expect_update_status().returning(move |_, status| {
+            statuses_clone.lock().unwrap().push(status);
+            Ok(())
+        });
+
+        let mut client = MockDataServiceClient::new();
+        client.expect_get_resolved_members().returning(|_| {
+            Err(SchedulingServiceError::DataServiceUnavailable(
+                "connection refused".into(),
+            ))
+        });
+
+        let rules = Arc::new(SchedulingConfig::default().build_rules());
+
+        let output = process_job(pending, Arc::new(repo), Arc::new(client), rules).await;
+        assert!(output.is_err());
+
+        // Verify status transitions: Pending -> Processing -> WaitingForRetry
+        let recorded = statuses.lock().unwrap();
+        assert_eq!(recorded.len(), 2);
+        assert_eq!(recorded[0], JobStatus::Processing);
+        assert_eq!(recorded[1], JobStatus::WaitingForRetry);
     }
 }

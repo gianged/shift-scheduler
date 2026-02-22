@@ -6,12 +6,14 @@ use uuid::Uuid;
 
 use crate::error::DataServiceError;
 
+/// Request payload for creating a new staff group.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateGroup {
     pub name: String,
     pub parent_group_id: Option<Uuid>,
 }
 
+/// Request payload for partially updating a staff group. All fields are optional.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateGroup {
     pub name: Option<String>,
@@ -19,6 +21,7 @@ pub struct UpdateGroup {
     pub parent_group_id: Option<Option<Uuid>>,
 }
 
+/// Persistence operations for staff groups.
 #[cfg_attr(feature = "test-support", mockall::automock)]
 #[async_trait]
 pub trait GroupRepository: Send + Sync {

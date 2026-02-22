@@ -8,6 +8,7 @@ use crate::{
     error::DataServiceError,
 };
 
+/// PostgreSQL-backed implementation of [`MembershipRepository`].
 pub struct PgMembershipRepository {
     pool: PgPool,
 }
@@ -39,14 +40,20 @@ impl MembershipRepository for PgMembershipRepository {
         match output {
             Ok(_) => Ok(()),
             Err(sqlx::Error::Database(e)) => {
-                let msg = e.message();
-                if msg.contains("fk_gm_staff") {
-                    Err(DataServiceError::NotFound("Staff not found".to_string()))
-                } else if msg.contains("fk_gm_group") {
-                    Err(DataServiceError::NotFound("Group not found".to_string()))
-                } else if msg.contains("duplicate") || msg.contains("already exists") {
+                if let Some(constraint) = e.constraint() {
+                    match constraint {
+                        "fk_gm_staff" => {
+                            return Err(DataServiceError::NotFound("Staff not found".into()));
+                        }
+                        "fk_gm_group" => {
+                            return Err(DataServiceError::NotFound("Group not found".into()));
+                        }
+                        _ => {}
+                    }
+                }
+                if e.is_unique_violation() {
                     Err(DataServiceError::BadRequest(
-                        "Staff already in group".to_string(),
+                        "Staff already in group".into(),
                     ))
                 } else {
                     Err(sqlx::Error::Database(e).into())
@@ -74,9 +81,7 @@ impl MembershipRepository for PgMembershipRepository {
         .await?;
 
         if output.rows_affected() == 0 {
-            return Err(DataServiceError::NotFound(
-                "Membership not found".to_string(),
-            ));
+            return Err(DataServiceError::NotFound("Membership not found".into()));
         }
 
         Ok(())
@@ -118,6 +123,7 @@ impl MembershipRepository for PgMembershipRepository {
         Ok(output)
     }
 
+    /// Uses a recursive CTE to walk the group hierarchy and collect distinct staff members.
     #[tracing::instrument(skip(self))]
     async fn resolve_members(&self, group_id: Uuid) -> Result<Vec<Staff>, DataServiceError> {
         let output = sqlx::query_as!(

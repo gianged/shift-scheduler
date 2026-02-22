@@ -3,6 +3,7 @@ use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt};
 
+/// RAII guard that shuts down the OpenTelemetry tracer provider on drop.
 pub struct TelemetryGuard {
     provider: Option<opentelemetry_sdk::trace::SdkTracerProvider>,
 }
@@ -17,6 +18,13 @@ impl Drop for TelemetryGuard {
     }
 }
 
+/// Initializes tracing with optional JSON formatting and optional OTLP export.
+///
+/// Configuration is driven by environment variables:
+/// - `RUST_LOG` / `LOG_FORMAT` for log filtering and formatting
+/// - `OTEL_EXPORTER_OTLP_ENDPOINT` to enable trace export
+///
+/// Returns a guard that must be held for the lifetime of the application.
 pub fn init_telemetry(service_name: &str) -> TelemetryGuard {
     opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
 

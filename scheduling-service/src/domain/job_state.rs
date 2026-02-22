@@ -2,14 +2,16 @@ use chrono::NaiveDate;
 use shared::types::{JobStatus, ScheduleJob};
 use uuid::Uuid;
 
-/// wrapper for a job in `Pending` status.
-/// consuming `start_processing` into to `ProcessingJob`.
+/// Wrapper for a job in `Pending` status.
+///
+/// Consuming `start_processing` transitions into `ProcessingJob`.
 pub struct PendingJob {
     inner: ScheduleJob,
 }
 
-/// wrapper for a job in `Processing` status.
-/// consuming `complete` or `fail` into to terminal states.
+/// Wrapper for a job in `Processing` status.
+///
+/// Consuming `complete` or `fail` transitions into terminal states.
 pub struct ProcessingJob {
     inner: ScheduleJob,
 }
@@ -24,7 +26,13 @@ pub struct FailedJob {
     inner: ScheduleJob,
 }
 
+/// Job is waiting for data service to recover before retrying.
+pub struct WaitingForRetryJob {
+    inner: ScheduleJob,
+}
+
 impl PendingJob {
+    /// Validates the job is actually in `Pending` status, returning `None` otherwise.
     pub fn from_schedule_job(job: ScheduleJob) -> Option<Self> {
         if job.status == JobStatus::Pending {
             Some(Self { inner: job })
@@ -76,6 +84,16 @@ impl ProcessingJob {
         self.inner.status = JobStatus::Failed;
         (FailedJob { inner: self.inner }, id, JobStatus::Failed)
     }
+
+    pub fn wait_for_retry(mut self) -> (WaitingForRetryJob, Uuid, JobStatus) {
+        let id = self.inner.id;
+        self.inner.status = JobStatus::WaitingForRetry;
+        (
+            WaitingForRetryJob { inner: self.inner },
+            id,
+            JobStatus::WaitingForRetry,
+        )
+    }
 }
 
 impl CompletedJob {
@@ -85,6 +103,23 @@ impl CompletedJob {
 }
 
 impl FailedJob {
+    pub fn into_inner(self) -> ScheduleJob {
+        self.inner
+    }
+}
+
+impl WaitingForRetryJob {
+    pub fn id(&self) -> Uuid {
+        self.inner.id
+    }
+
+    /// Resets this job back to `Pending` so it can be re-processed when the data service recovers.
+    pub fn into_pending(mut self) -> (PendingJob, Uuid, JobStatus) {
+        let id = self.inner.id;
+        self.inner.status = JobStatus::Pending;
+        (PendingJob { inner: self.inner }, id, JobStatus::Pending)
+    }
+
     pub fn into_inner(self) -> ScheduleJob {
         self.inner
     }
@@ -118,6 +153,7 @@ mod tests {
             JobStatus::Processing,
             JobStatus::Completed,
             JobStatus::Failed,
+            JobStatus::WaitingForRetry,
         ] {
             let job = make_job(status);
             assert!(PendingJob::from_schedule_job(job).is_none());
@@ -164,5 +200,35 @@ mod tests {
 
         let inner = failed.into_inner();
         assert_eq!(inner.status, JobStatus::Failed);
+    }
+
+    #[test]
+    fn processing_to_waiting_for_retry_transition() {
+        let job = make_job(JobStatus::Pending);
+        let job_id = job.id;
+        let pending = PendingJob::from_schedule_job(job).unwrap();
+        let (processing, _, _) = pending.start_processing();
+
+        let (waiting, id, status) = processing.wait_for_retry();
+        assert_eq!(id, job_id);
+        assert_eq!(status, JobStatus::WaitingForRetry);
+        assert_eq!(waiting.id(), job_id);
+
+        let inner = waiting.into_inner();
+        assert_eq!(inner.status, JobStatus::WaitingForRetry);
+    }
+
+    #[test]
+    fn waiting_for_retry_to_pending_transition() {
+        let job = make_job(JobStatus::Pending);
+        let job_id = job.id;
+        let pending = PendingJob::from_schedule_job(job).unwrap();
+        let (processing, _, _) = pending.start_processing();
+        let (waiting, _, _) = processing.wait_for_retry();
+
+        let (new_pending, id, status) = waiting.into_pending();
+        assert_eq!(id, job_id);
+        assert_eq!(status, JobStatus::Pending);
+        assert_eq!(new_pending.id(), job_id);
     }
 }

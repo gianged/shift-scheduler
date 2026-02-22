@@ -53,10 +53,8 @@ pub async fn find_by_id(
 ) -> Result<Json<ApiResponse<Staff>>, DataServiceError> {
     let output = state.staff_repo.find_by_id(id).await?;
 
-    match output {
-        Some(s) => Ok(Json(ApiResponse::ok(s))),
-        None => Err(DataServiceError::NotFound("Staff not found".to_string())),
-    }
+    let staff = output.ok_or_else(|| DataServiceError::NotFound("Staff not found".into()))?;
+    Ok(Json(ApiResponse::ok(staff)))
 }
 
 #[utoipa::path(
@@ -74,9 +72,29 @@ pub async fn create(
     State(state): State<Arc<DataServiceAppState>>,
     Json(staff): Json<CreateStaff>,
 ) -> Result<Json<ApiResponse<Staff>>, DataServiceError> {
+    validate_create_staff(&staff)?;
     let output = state.staff_repo.create(staff).await?;
 
     Ok(Json(ApiResponse::ok(output)))
+}
+
+fn validate_create_staff(staff: &CreateStaff) -> Result<(), DataServiceError> {
+    if staff.name.trim().is_empty() {
+        return Err(DataServiceError::BadRequest(
+            "Name must not be empty".into(),
+        ));
+    }
+    if staff.email.trim().is_empty() {
+        return Err(DataServiceError::BadRequest(
+            "Email must not be empty".into(),
+        ));
+    }
+    if staff.position.trim().is_empty() {
+        return Err(DataServiceError::BadRequest(
+            "Position must not be empty".into(),
+        ));
+    }
+    Ok(())
 }
 
 #[utoipa::path(

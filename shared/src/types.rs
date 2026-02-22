@@ -6,7 +6,8 @@ use uuid::Uuid;
 
 // region: Data Service Types
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type, ToSchema)]
+/// Employment status of a staff member.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Type, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[sqlx(type_name = "staff_status", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StaffStatus {
@@ -14,6 +15,7 @@ pub enum StaffStatus {
     Inactive,
 }
 
+/// A staff member record from the data service.
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct Staff {
     pub id: Uuid,
@@ -25,6 +27,7 @@ pub struct Staff {
     pub updated_at: DateTime<Utc>,
 }
 
+/// A hierarchical staff group. Groups can have a parent, forming a tree.
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct StaffGroup {
     pub id: Uuid,
@@ -34,6 +37,7 @@ pub struct StaffGroup {
     pub updated_at: DateTime<Utc>,
 }
 
+/// A join record linking a staff member to a group.
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct GroupMembership {
     pub staff_id: Uuid,
@@ -44,7 +48,8 @@ pub struct GroupMembership {
 
 // region: Scheduling Service Types
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type, ToSchema)]
+/// Lifecycle status of a schedule job.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Type, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[sqlx(type_name = "job_status", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum JobStatus {
@@ -52,9 +57,11 @@ pub enum JobStatus {
     Processing,
     Completed,
     Failed,
+    WaitingForRetry,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type, ToSchema)]
+/// The type of shift assigned to a staff member on a given day.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Type, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[sqlx(type_name = "shift_type", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ShiftType {
@@ -63,6 +70,7 @@ pub enum ShiftType {
     DayOff,
 }
 
+/// A schedule generation job tracked by the scheduling service.
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct ScheduleJob {
     pub id: Uuid,
@@ -73,6 +81,8 @@ pub struct ScheduleJob {
     pub updated_at: DateTime<Utc>,
 }
 
+/// A single shift assignment produced by the scheduler, linking a staff member
+/// to a specific date and shift type.
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct ShiftAssignment {
     pub id: Uuid,
@@ -82,6 +92,7 @@ pub struct ShiftAssignment {
     pub shift_type: ShiftType,
 }
 
+/// The complete result of a schedule job, including all shift assignments.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ScheduleResult {
     pub schedule_id: Uuid,

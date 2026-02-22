@@ -5,12 +5,15 @@ use uuid::Uuid;
 
 use crate::error::SchedulingServiceError;
 
+/// A shift assignment to be persisted, before it has a database-generated ID.
+#[derive(Debug)]
 pub struct NewShiftAssignment {
     pub staff_id: Uuid,
     pub date: NaiveDate,
     pub shift_type: ShiftType,
 }
 
+/// Persistence operations for schedule jobs and their shift assignments.
 #[cfg_attr(feature = "test-support", mockall::automock)]
 #[async_trait]
 pub trait JobRepository: Send + Sync {
