@@ -23,6 +23,10 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 impl HttpDataServiceClient {
     /// Builds an HTTP client with the configured timeout.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the HTTP client cannot be built (invalid TLS configuration).
     pub fn new(base_url: String) -> Self {
         let client = Client::builder()
             .timeout(REQUEST_TIMEOUT)
@@ -85,7 +89,7 @@ impl DataServiceClient for HttpDataServiceClient {
                         })?;
 
                     return api_response.data.ok_or_else(|| {
-                        SchedulingServiceError::DataService("No data in response".to_string())
+                        SchedulingServiceError::DataService("No data in response".into())
                     });
                 }
                 Err(e) => {

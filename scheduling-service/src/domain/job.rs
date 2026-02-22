@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::error::SchedulingServiceError;
 
 /// A shift assignment to be persisted, before it has a database-generated ID.
+#[derive(Debug)]
 pub struct NewShiftAssignment {
     pub staff_id: Uuid,
     pub date: NaiveDate,

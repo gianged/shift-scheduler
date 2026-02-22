@@ -50,6 +50,10 @@ impl HealthCheckConfig {
 ///
 /// When the data service recovers after an outage, the health check force-closes the
 /// circuit breaker and triggers a retry of all `WaitingForRetry` jobs.
+///
+/// # Panics
+///
+/// Panics if the HTTP client cannot be built.
 pub fn spawn_health_check(
     config: HealthCheckConfig,
     breaker: Arc<Mutex<CircuitBreaker>>,
@@ -75,7 +79,7 @@ pub fn spawn_health_check(
 
         loop {
             tokio::select! {
-                _ = cancel_token.cancelled() => {
+                () = cancel_token.cancelled() => {
                     tracing::info!("Health check task shutting down");
                     break;
                 }

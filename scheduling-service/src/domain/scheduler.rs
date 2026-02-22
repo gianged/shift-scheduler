@@ -107,6 +107,7 @@ pub enum SchedulingError {
 // region: Trait-based scheduling rules
 
 /// Snapshot of scheduling state passed to rules when evaluating a candidate shift.
+#[derive(Debug)]
 pub struct AssignmentContext {
     pub previous_shift: Option<ShiftType>,
     pub day_offs_this_week: u8,
@@ -118,7 +119,7 @@ pub struct AssignmentContext {
 /// A pluggable scheduling constraint. Rules are evaluated in order; a candidate shift
 /// is only assigned if all rules return `true`.
 pub trait SchedulingRule: Send + Sync {
-    fn name(&self) -> &str;
+    fn name(&self) -> &'static str;
     fn is_valid(&self, ctx: &AssignmentContext, candidate: &ShiftType) -> bool;
 }
 
@@ -126,7 +127,7 @@ pub trait SchedulingRule: Send + Sync {
 pub struct NoMorningAfterEveningRule;
 
 impl SchedulingRule for NoMorningAfterEveningRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "no_morning_after_evening"
     }
 
@@ -144,7 +145,7 @@ pub struct MaxDayOffRule {
 }
 
 impl SchedulingRule for MaxDayOffRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "max_day_off"
     }
 
@@ -163,7 +164,7 @@ pub struct MinDayOffRule {
 }
 
 impl SchedulingRule for MinDayOffRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "min_day_off"
     }
 
@@ -181,7 +182,7 @@ pub struct DailyBalanceRule {
 }
 
 impl SchedulingRule for DailyBalanceRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "daily_balance"
     }
 

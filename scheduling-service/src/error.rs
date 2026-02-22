@@ -1,6 +1,5 @@
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use shared::responses::ApiResponse;
 use thiserror::Error;
 
@@ -40,20 +39,12 @@ pub enum SchedulingServiceError {
 
 impl IntoResponse for SchedulingServiceError {
     fn into_response(self) -> Response {
-        let (status, message) = match &self {
-            Self::NotFound(message) => (StatusCode::NOT_FOUND, message.clone()),
-            Self::BadRequest(message) => (StatusCode::BAD_REQUEST, message.clone()),
-            Self::Internal(message) => (StatusCode::INTERNAL_SERVER_ERROR, message.clone()),
-            Self::Database(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Oof, Something went wrong while accessing the database.".into(),
-            ),
-            Self::DataService(message) => (StatusCode::BAD_GATEWAY, message.clone()),
-            Self::DataServiceUnavailable(message) => (StatusCode::BAD_GATEWAY, message.clone()),
-            Self::CircuitOpen => (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Data service is currently unavailable, please try again later".into(),
-            ),
+        let status = match &self {
+            Self::NotFound(_) => StatusCode::NOT_FOUND,
+            Self::BadRequest(_) => StatusCode::BAD_REQUEST,
+            Self::Internal(_) | Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::DataService(_) | Self::DataServiceUnavailable(_) => StatusCode::BAD_GATEWAY,
+            Self::CircuitOpen => StatusCode::SERVICE_UNAVAILABLE,
         };
 
         if status.is_server_error() {
@@ -61,6 +52,16 @@ impl IntoResponse for SchedulingServiceError {
         } else {
             tracing::warn!(error = %self, %status, "Client error");
         }
+
+        let message = match self {
+            Self::Database(_) => {
+                "Oof, Something went wrong while accessing the database.".to_owned()
+            }
+            Self::CircuitOpen => {
+                "Data service is currently unavailable, please try again later".to_owned()
+            }
+            other => other.to_string(),
+        };
 
         let body = ApiResponse::<()>::err(message);
         (status, axum::Json(body)).into_response()

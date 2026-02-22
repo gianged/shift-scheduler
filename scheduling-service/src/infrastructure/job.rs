@@ -99,10 +99,10 @@ impl JobRepository for PgJobRepository {
         let shift_types: Vec<ShiftType> = assignments.iter().map(|a| a.shift_type).collect();
 
         sqlx::query(
-            r#"
+            r"
             INSERT INTO shift_assignments (job_id, staff_id, date, shift_type)
             SELECT * FROM UNNEST($1::uuid[], $2::uuid[], $3::date[], $4::shift_type[])
-            "#,
+            ",
         )
         .bind(&job_ids)
         .bind(&staff_ids)

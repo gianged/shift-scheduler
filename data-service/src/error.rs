@@ -1,6 +1,5 @@
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use shared::responses::ApiResponse;
 use thiserror::Error;
 
@@ -32,15 +31,11 @@ pub enum DataServiceError {
 
 impl IntoResponse for DataServiceError {
     fn into_response(self) -> Response {
-        let (status, message) = match &self {
-            Self::NotFound(message) => (StatusCode::NOT_FOUND, message.clone()),
-            Self::Conflict(message) => (StatusCode::CONFLICT, message.clone()),
-            Self::BadRequest(message) => (StatusCode::BAD_REQUEST, message.clone()),
-            Self::Internal(message) => (StatusCode::INTERNAL_SERVER_ERROR, message.clone()),
-            Self::Database(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Oof, Something went wrong while accessing the database.".into(),
-            ),
+        let status = match &self {
+            Self::NotFound(_) => StatusCode::NOT_FOUND,
+            Self::Conflict(_) => StatusCode::CONFLICT,
+            Self::BadRequest(_) => StatusCode::BAD_REQUEST,
+            Self::Internal(_) | Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         if status.is_server_error() {
@@ -48,6 +43,13 @@ impl IntoResponse for DataServiceError {
         } else {
             tracing::warn!(error = %self, %status, "Client error");
         }
+
+        let message = match self {
+            Self::Database(_) => {
+                "Oof, Something went wrong while accessing the database.".to_owned()
+            }
+            other => other.to_string(),
+        };
 
         let body = ApiResponse::<()>::err(message);
         (status, axum::Json(body)).into_response()

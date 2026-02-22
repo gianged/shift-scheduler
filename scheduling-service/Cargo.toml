@@ -39,6 +39,9 @@ toml = { version = "0.9.8" }
 chrono-tz = { version = "0.10.4" }
 shared = { path = "../shared" }
 
+[lints]
+workspace = true
+
 [dev-dependencies]
 scheduling-service = { path = ".", features = ["test-support"] }
 tokio = { version = "1.49.0", features = ["full", "test-util"] }

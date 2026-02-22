@@ -64,7 +64,6 @@ impl CircuitBreaker {
     /// When `Open`, transitions to `HalfOpen` if the cooldown has elapsed.
     pub fn can_execute(&mut self) -> bool {
         match self.state {
-            CircuitState::Closed => true,
             CircuitState::Open => {
                 if let Some(last_failure) = self.last_failure_time
                     && last_failure.elapsed() >= self.config.cooldown_duration()
@@ -75,7 +74,7 @@ impl CircuitBreaker {
                 }
                 false
             }
-            CircuitState::HalfOpen => true,
+            CircuitState::Closed | CircuitState::HalfOpen => true,
         }
     }
 

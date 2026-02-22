@@ -53,14 +53,14 @@ impl SchedulingService {
     ) -> Result<ScheduleJob, SchedulingServiceError> {
         if period_begin_date.weekday() != chrono::Weekday::Mon {
             return Err(SchedulingServiceError::BadRequest(
-                "period_begin_date must be a Monday".to_string(),
+                "period_begin_date must be a Monday".into(),
             ));
         }
 
         let today = shared::time::today_in(self.config.timezone());
         if period_begin_date < today {
             return Err(SchedulingServiceError::BadRequest(
-                "period_begin_date must not be in the past".to_string(),
+                "period_begin_date must not be in the past".into(),
             ));
         }
 
@@ -148,14 +148,7 @@ impl SchedulingService {
                     .update_status(job_id, JobStatus::Pending)
                     .await?;
 
-                let refreshed = self.job_repo.find_by_id(job_id).await?;
-                if let Some(job) = refreshed {
-                    if let Some(pending) = PendingJob::from_schedule_job(job) {
-                        self.spawn_process_job(pending);
-                    } else {
-                        tracing::warn!(%job_id, "Job no longer in Pending status after reset");
-                    }
-                }
+                self.respawn_as_pending(job_id).await?;
             }
         }
 
@@ -192,16 +185,22 @@ impl SchedulingService {
                 .update_status(job_id, JobStatus::Pending)
                 .await?;
 
-            let refreshed = self.job_repo.find_by_id(job_id).await?;
-            if let Some(job) = refreshed {
-                if let Some(pending) = PendingJob::from_schedule_job(job) {
-                    self.spawn_process_job(pending);
-                } else {
-                    tracing::warn!(%job_id, "Job no longer in Pending status after reset");
-                }
-            }
+            self.respawn_as_pending(job_id).await?;
         }
 
+        Ok(())
+    }
+
+    /// Reloads a job from the database and spawns processing if it is in `Pending` status.
+    async fn respawn_as_pending(&self, job_id: Uuid) -> Result<(), SchedulingServiceError> {
+        let Some(job) = self.job_repo.find_by_id(job_id).await? else {
+            return Ok(());
+        };
+        if let Some(pending) = PendingJob::from_schedule_job(job) {
+            self.spawn_process_job(pending);
+        } else {
+            tracing::warn!(%job_id, "Job no longer in Pending status after reset");
+        }
         Ok(())
     }
 }

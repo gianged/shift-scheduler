@@ -23,8 +23,8 @@ use shared::types::{JobStatus, ScheduleJob, ShiftAssignment, ShiftType};
 
 fn next_monday() -> NaiveDate {
     let today = Utc::now().date_naive();
-    let days_until_monday = (chrono::Weekday::Mon.num_days_from_monday() as i64 + 7
-        - today.weekday().num_days_from_monday() as i64)
+    let days_until_monday = (i64::from(chrono::Weekday::Mon.num_days_from_monday()) + 7
+        - i64::from(today.weekday().num_days_from_monday()))
         % 7;
     // If today is Monday, use next Monday
     let days_until_monday = if days_until_monday == 0 {

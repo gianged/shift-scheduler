@@ -53,10 +53,8 @@ pub async fn find_by_id(
 ) -> Result<Json<ApiResponse<Staff>>, DataServiceError> {
     let output = state.staff_repo.find_by_id(id).await?;
 
-    match output {
-        Some(s) => Ok(Json(ApiResponse::ok(s))),
-        None => Err(DataServiceError::NotFound("Staff not found".to_string())),
-    }
+    let staff = output.ok_or_else(|| DataServiceError::NotFound("Staff not found".into()))?;
+    Ok(Json(ApiResponse::ok(staff)))
 }
 
 #[utoipa::path(

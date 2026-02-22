@@ -114,7 +114,7 @@ impl GroupRepository for PgGroupRepository {
         .fetch_optional(&self.pool)
         .await?;
 
-        output.ok_or_else(|| DataServiceError::NotFound("Group not found".to_string()))
+        output.ok_or_else(|| DataServiceError::NotFound("Group not found".into()))
     }
 
     #[tracing::instrument(skip(self))]
@@ -130,7 +130,7 @@ impl GroupRepository for PgGroupRepository {
         .await?;
 
         if output.rows_affected() == 0 {
-            return Err(DataServiceError::NotFound("Group not found".to_string()));
+            return Err(DataServiceError::NotFound("Group not found".into()));
         }
 
         Ok(())
