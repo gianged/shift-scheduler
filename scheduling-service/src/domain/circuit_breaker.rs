@@ -2,6 +2,9 @@ use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 
+/// States of the circuit breaker state machine.
+///
+/// Transitions: `Closed` -> `Open` (on failure threshold) -> `HalfOpen` (after cooldown) -> `Closed` (on success).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CircuitState {
     Closed,
@@ -9,6 +12,7 @@ pub enum CircuitState {
     HalfOpen,
 }
 
+/// Configuration for the circuit breaker, typically deserialized from TOML config.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct CircuitBreakerConfig {
@@ -31,6 +35,8 @@ impl CircuitBreakerConfig {
     }
 }
 
+/// Tracks consecutive failures against a downstream service and prevents calls
+/// when the failure threshold is exceeded, allowing the service time to recover.
 pub struct CircuitBreaker {
     state: CircuitState,
     consecutive_failures: u32,
@@ -39,6 +45,7 @@ pub struct CircuitBreaker {
 }
 
 impl CircuitBreaker {
+    /// Creates a new circuit breaker in `Closed` state with zero failures.
     pub fn new(config: CircuitBreakerConfig) -> Self {
         Self {
             state: CircuitState::Closed,
@@ -52,6 +59,9 @@ impl CircuitBreaker {
         self.state
     }
 
+    /// Returns `true` if a call should be attempted.
+    ///
+    /// When `Open`, transitions to `HalfOpen` if the cooldown has elapsed.
     pub fn can_execute(&mut self) -> bool {
         match self.state {
             CircuitState::Closed => true,
@@ -69,6 +79,7 @@ impl CircuitBreaker {
         }
     }
 
+    /// Records a successful call, resetting the breaker to `Closed`.
     pub fn record_success(&mut self) {
         if self.state != CircuitState::Closed {
             tracing::info!(
@@ -81,6 +92,8 @@ impl CircuitBreaker {
         self.state = CircuitState::Closed;
     }
 
+    /// Records a failed call. Opens the breaker when consecutive failures reach the threshold.
+    /// If already `HalfOpen`, immediately re-opens.
     pub fn record_failure(&mut self) {
         self.consecutive_failures += 1;
         self.last_failure_time = Some(Instant::now());
@@ -88,10 +101,10 @@ impl CircuitBreaker {
         match self.state {
             CircuitState::Closed => {
                 if self.consecutive_failures >= self.config.failure_threshold {
+                    let failures = self.consecutive_failures;
                     tracing::warn!(
-                        failures = self.consecutive_failures,
+                        failures,
                         "Circuit breaker opening after {failures} consecutive failures",
-                        failures = self.consecutive_failures,
                     );
                     self.state = CircuitState::Open;
                 }
@@ -104,6 +117,8 @@ impl CircuitBreaker {
         }
     }
 
+    /// Forcibly resets the breaker to `Closed`, used by the health check when the
+    /// downstream service is confirmed healthy.
     pub fn force_close(&mut self) {
         if self.state != CircuitState::Closed {
             tracing::info!(

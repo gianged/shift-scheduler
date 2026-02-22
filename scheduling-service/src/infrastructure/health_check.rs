@@ -11,6 +11,7 @@ use tokio_util::task::TaskTracker;
 use crate::domain::circuit_breaker::{CircuitBreaker, CircuitState};
 use crate::domain::service::SchedulingService;
 
+/// Serializable health check settings, typically loaded from the scheduling config file.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct HealthCheckSettings {
@@ -27,6 +28,7 @@ impl Default for HealthCheckSettings {
     }
 }
 
+/// Resolved health check configuration with concrete `Duration` values and the full endpoint URL.
 pub struct HealthCheckConfig {
     pub interval: Duration,
     pub health_endpoint: String,
@@ -34,6 +36,7 @@ pub struct HealthCheckConfig {
 }
 
 impl HealthCheckConfig {
+    /// Converts serializable settings into a resolved config using the data service base URL.
     pub fn from_settings(settings: &HealthCheckSettings, data_service_url: &str) -> Self {
         Self {
             interval: Duration::from_secs(settings.interval_secs),
@@ -43,6 +46,10 @@ impl HealthCheckConfig {
     }
 }
 
+/// Spawns a periodic health check task that pings the data service.
+///
+/// When the data service recovers after an outage, the health check force-closes the
+/// circuit breaker and triggers a retry of all `WaitingForRetry` jobs.
 pub fn spawn_health_check(
     config: HealthCheckConfig,
     breaker: Arc<Mutex<CircuitBreaker>>,

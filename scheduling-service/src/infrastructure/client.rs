@@ -10,15 +10,19 @@ use uuid::Uuid;
 
 use crate::{domain::client::DataServiceClient, error::SchedulingServiceError};
 
+/// HTTP client for the data-service, with retry logic and OpenTelemetry trace propagation.
 pub struct HttpDataServiceClient {
     client: Client,
     base_url: String,
 }
 
+/// Maximum number of retry attempts for transient HTTP failures.
 const MAX_RETRIES: u32 = 3;
+/// Per-request timeout applied to the underlying HTTP client.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 impl HttpDataServiceClient {
+    /// Builds an HTTP client with the configured timeout.
     pub fn new(base_url: String) -> Self {
         let client = Client::builder()
             .timeout(REQUEST_TIMEOUT)
@@ -28,6 +32,7 @@ impl HttpDataServiceClient {
     }
 }
 
+/// Adapter to inject OpenTelemetry trace context into HTTP request headers.
 struct HeaderMapInjector<'a>(&'a mut header::HeaderMap);
 
 impl Injector for HeaderMapInjector<'_> {
@@ -47,10 +52,8 @@ impl DataServiceClient for HttpDataServiceClient {
         &self,
         staff_group_id: Uuid,
     ) -> Result<Vec<Staff>, SchedulingServiceError> {
-        let url = format!(
-            "{}/api/v1/groups/{staff_group_id}/resolved-members",
-            self.base_url
-        );
+        let base_url = &self.base_url;
+        let url = format!("{base_url}/api/v1/groups/{staff_group_id}/resolved-members");
 
         tracing::debug!(%url, "Requesting resolved members");
 
@@ -101,9 +104,9 @@ impl DataServiceClient for HttpDataServiceClient {
             }
         }
 
+        let last_err = last_err.expect("at least one error occurred");
         Err(SchedulingServiceError::DataServiceUnavailable(format!(
-            "Failed to reach Data Service after {MAX_RETRIES} attempts: {}",
-            last_err.expect("at least one error occurred")
+            "Failed to reach Data Service after {MAX_RETRIES} attempts: {last_err}"
         )))
     }
 }

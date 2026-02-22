@@ -11,6 +11,7 @@ use crate::domain::circuit_breaker::CircuitBreakerConfig;
 use crate::domain::job::NewShiftAssignment;
 use crate::infrastructure::health_check::HealthCheckSettings;
 
+/// Errors that can occur when loading or validating the scheduling configuration.
 #[derive(Debug, Error)]
 pub enum ConfigError {
     #[error("IO error: {0}")]
@@ -21,9 +22,13 @@ pub enum ConfigError {
     Invalid(String),
 }
 
+/// Fixed scheduling period of 28 days (4 weeks).
 const PERIOD_DAYS: usize = 28;
+/// Days per week, used to track weekly rule boundaries.
 const DAYS_PER_WEEK: usize = 7;
 
+/// Scheduling configuration loaded from TOML, controlling scheduling rules,
+/// circuit breaker settings, and health check parameters.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct SchedulingConfig {
@@ -51,6 +56,7 @@ impl Default for SchedulingConfig {
 }
 
 impl SchedulingConfig {
+    /// Loads config from a TOML file, falling back to defaults if the file does not exist.
     pub fn load(path: &str) -> Result<Self, ConfigError> {
         if !Path::new(path).exists() {
             tracing::info!("Config file not found at {path}, using defaults");
@@ -79,6 +85,7 @@ impl SchedulingConfig {
         Ok(())
     }
 
+    /// Parses the configured timezone string, falling back to UTC on invalid values.
     pub fn timezone(&self) -> Tz {
         self.timezone.parse::<Tz>().unwrap_or_else(|_| {
             tracing::warn!(
@@ -90,6 +97,7 @@ impl SchedulingConfig {
     }
 }
 
+/// Errors that can occur during schedule generation.
 #[derive(Debug, Error)]
 pub enum SchedulingError {
     #[error("No valid shift found for staff {staff_id} on day {day}")]
@@ -98,6 +106,7 @@ pub enum SchedulingError {
 
 // region: Trait-based scheduling rules
 
+/// Snapshot of scheduling state passed to rules when evaluating a candidate shift.
 pub struct AssignmentContext {
     pub previous_shift: Option<ShiftType>,
     pub day_offs_this_week: u8,
@@ -106,11 +115,14 @@ pub struct AssignmentContext {
     pub evening_count: usize,
 }
 
+/// A pluggable scheduling constraint. Rules are evaluated in order; a candidate shift
+/// is only assigned if all rules return `true`.
 pub trait SchedulingRule: Send + Sync {
     fn name(&self) -> &str;
     fn is_valid(&self, ctx: &AssignmentContext, candidate: &ShiftType) -> bool;
 }
 
+/// Prevents assigning a morning shift immediately following an evening shift.
 pub struct NoMorningAfterEveningRule;
 
 impl SchedulingRule for NoMorningAfterEveningRule {
@@ -126,6 +138,7 @@ impl SchedulingRule for NoMorningAfterEveningRule {
     }
 }
 
+/// Limits the maximum number of days off per week per staff member.
 pub struct MaxDayOffRule {
     pub max: u8,
 }
@@ -143,6 +156,8 @@ impl SchedulingRule for MaxDayOffRule {
     }
 }
 
+/// Ensures each staff member gets at least a minimum number of days off per week.
+/// Rejects working shifts when remaining days in the week cannot satisfy the minimum.
 pub struct MinDayOffRule {
     pub min: u8,
 }
@@ -160,6 +175,7 @@ impl SchedulingRule for MinDayOffRule {
     }
 }
 
+/// Keeps the daily count of morning and evening shifts balanced within a maximum difference.
 pub struct DailyBalanceRule {
     pub max_diff: u8,
 }
@@ -180,6 +196,7 @@ impl SchedulingRule for DailyBalanceRule {
 }
 
 impl SchedulingConfig {
+    /// Constructs the list of scheduling rules based on the current configuration.
     pub fn build_rules(&self) -> Vec<Box<dyn SchedulingRule>> {
         let mut rules: Vec<Box<dyn SchedulingRule>> = Vec::new();
         if self.no_morning_after_evening {
@@ -202,6 +219,11 @@ impl SchedulingConfig {
 
 // region: Main algo
 
+/// Generates a 28-day shift schedule for the given staff.
+///
+/// Uses a greedy assignment algorithm that iterates day-by-day, alternating staff
+/// order and shift preference each day for fairness. All configured rules are
+/// evaluated per candidate assignment.
 #[tracing::instrument(skip(staff_ids, rules))]
 pub fn gen_schedule(
     staff_ids: &[Uuid],

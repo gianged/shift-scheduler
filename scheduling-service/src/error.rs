@@ -4,27 +4,36 @@ use axum::response::Response;
 use shared::responses::ApiResponse;
 use thiserror::Error;
 
-// Scheduling Service Error
+/// Application-level errors for the scheduling service.
+///
+/// Each variant maps to an HTTP status code via the [`IntoResponse`] implementation.
 #[derive(Debug, Error)]
 pub enum SchedulingServiceError {
+    /// Requested resource was not found.
     #[error("Not Found: {0}")]
     NotFound(String),
 
+    /// Client sent an invalid request.
     #[error("Bad Request: {0}")]
     BadRequest(String),
 
+    /// Unexpected internal failure.
     #[error("Internal Server Error: {0}")]
     Internal(String),
 
+    /// Database query or connection error.
     #[error("Database Error: {0}")]
     Database(#[from] sqlx::Error),
 
+    /// Data service returned a non-success response.
     #[error("Data Service Error: {0}")]
     DataService(String),
 
+    /// Data service is unreachable after retries (connection-level failure).
     #[error("Data Service unavailable: {0}")]
     DataServiceUnavailable(String),
 
+    /// Circuit breaker is open; data service calls are being fast-failed.
     #[error("Circuit breaker is open - data service unavailable")]
     CircuitOpen,
 }

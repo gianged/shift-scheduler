@@ -4,21 +4,28 @@ use axum::response::Response;
 use shared::responses::ApiResponse;
 use thiserror::Error;
 
-// Data Service Error
+/// Application-level errors for the data service.
+///
+/// Each variant maps to an HTTP status code via the [`IntoResponse`] implementation.
 #[derive(Debug, Error)]
 pub enum DataServiceError {
+    /// Requested resource was not found.
     #[error("Not Found: {0}")]
     NotFound(String),
 
+    /// Operation conflicts with existing data (e.g., duplicate).
     #[error("Conflict: {0}")]
     Conflict(String),
 
+    /// Client sent an invalid request.
     #[error("Bad Request: {0}")]
     BadRequest(String),
 
+    /// Unexpected internal failure.
     #[error("Internal Server Error: {0}")]
     Internal(String),
 
+    /// Database query or connection error.
     #[error("Database Error: {0}")]
     Database(#[from] sqlx::Error),
 }

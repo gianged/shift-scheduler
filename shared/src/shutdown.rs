@@ -1,7 +1,9 @@
 use std::time::Duration;
 
+/// Maximum time to wait for background tasks during graceful shutdown.
 pub const DEFAULT_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Waits for either Ctrl+C or SIGTERM, then returns to trigger graceful shutdown.
 pub async fn shutdown_signal() {
     let ctrl_c = async {
         tokio::signal::ctrl_c()

@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use crate::{api::state::SchedulingAppState, error::SchedulingServiceError};
 
+/// Request body for submitting a new schedule job.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateScheduleRequest {
     pub staff_group_id: Uuid,

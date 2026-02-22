@@ -8,6 +8,7 @@ use crate::{
     error::DataServiceError,
 };
 
+/// PostgreSQL-backed implementation of [`StaffRepository`].
 pub struct PgStaffRepository {
     pool: PgPool,
 }

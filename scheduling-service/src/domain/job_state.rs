@@ -2,14 +2,16 @@ use chrono::NaiveDate;
 use shared::types::{JobStatus, ScheduleJob};
 use uuid::Uuid;
 
-/// wrapper for a job in `Pending` status.
-/// consuming `start_processing` into to `ProcessingJob`.
+/// Wrapper for a job in `Pending` status.
+///
+/// Consuming `start_processing` transitions into `ProcessingJob`.
 pub struct PendingJob {
     inner: ScheduleJob,
 }
 
-/// wrapper for a job in `Processing` status.
-/// consuming `complete` or `fail` into to terminal states.
+/// Wrapper for a job in `Processing` status.
+///
+/// Consuming `complete` or `fail` transitions into terminal states.
 pub struct ProcessingJob {
     inner: ScheduleJob,
 }
@@ -30,6 +32,7 @@ pub struct WaitingForRetryJob {
 }
 
 impl PendingJob {
+    /// Validates the job is actually in `Pending` status, returning `None` otherwise.
     pub fn from_schedule_job(job: ScheduleJob) -> Option<Self> {
         if job.status == JobStatus::Pending {
             Some(Self { inner: job })
@@ -110,6 +113,7 @@ impl WaitingForRetryJob {
         self.inner.id
     }
 
+    /// Resets this job back to `Pending` so it can be re-processed when the data service recovers.
     pub fn into_pending(mut self) -> (PendingJob, Uuid, JobStatus) {
         let id = self.inner.id;
         self.inner.status = JobStatus::Pending;

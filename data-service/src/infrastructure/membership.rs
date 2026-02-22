@@ -8,6 +8,7 @@ use crate::{
     error::DataServiceError,
 };
 
+/// PostgreSQL-backed implementation of [`MembershipRepository`].
 pub struct PgMembershipRepository {
     pool: PgPool,
 }
@@ -124,6 +125,7 @@ impl MembershipRepository for PgMembershipRepository {
         Ok(output)
     }
 
+    /// Uses a recursive CTE to walk the group hierarchy and collect distinct staff members.
     #[tracing::instrument(skip(self))]
     async fn resolve_members(&self, group_id: Uuid) -> Result<Vec<Staff>, DataServiceError> {
         let output = sqlx::query_as!(

@@ -6,12 +6,14 @@ use uuid::Uuid;
 
 use crate::error::DataServiceError;
 
+/// Request payload for adding a staff member to a group.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct AddMembership {
     pub staff_id: Uuid,
     pub group_id: Uuid,
 }
 
+/// Persistence operations for group membership relationships.
 #[cfg_attr(feature = "test-support", mockall::automock)]
 #[async_trait]
 pub trait MembershipRepository: Send + Sync {
@@ -27,6 +29,7 @@ pub trait MembershipRepository: Send + Sync {
     ) -> Result<(), DataServiceError>;
     async fn get_group_members(&self, group_id: Uuid) -> Result<Vec<Staff>, DataServiceError>;
     async fn get_staff_groups(&self, staff_id: Uuid) -> Result<Vec<StaffGroup>, DataServiceError>;
+    /// Recursively resolves all staff members in this group and all descendant sub-groups.
     async fn resolve_members(&self, group_id: Uuid) -> Result<Vec<Staff>, DataServiceError>;
     async fn batch_add_members(
         &self,

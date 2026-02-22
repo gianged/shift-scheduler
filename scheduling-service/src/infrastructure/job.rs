@@ -9,6 +9,7 @@ use crate::{
     error::SchedulingServiceError,
 };
 
+/// PostgreSQL-backed implementation of [`JobRepository`].
 pub struct PgJobRepository {
     pool: PgPool,
 }

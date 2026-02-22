@@ -9,12 +9,16 @@ use crate::domain::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
 use crate::domain::client::DataServiceClient;
 use crate::error::SchedulingServiceError;
 
+/// Decorator around a [`DataServiceClient`] that checks the circuit breaker before
+/// delegating calls and records successes/failures.
 pub struct CircuitBreakerClient {
     inner: Arc<dyn DataServiceClient>,
     breaker: Arc<Mutex<CircuitBreaker>>,
 }
 
 impl CircuitBreakerClient {
+    /// Creates a new circuit-breaker-wrapped client. Returns both the client and a
+    /// shared handle to the breaker (used by the health check to force-close it).
     pub fn new(
         inner: Arc<dyn DataServiceClient>,
         config: CircuitBreakerConfig,
